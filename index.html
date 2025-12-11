@@ -4166,17 +4166,17 @@
             );
           }
           
-          // 컴프레서 생성 (OBS 스타일 자동 감도 조절)
+          // 컴프레서 생성 (고감도 자동 감도 조절 - 멀리서도 잘 잡음)
           recordingCompressor = recordingAudioContext.createDynamicsCompressor();
-          recordingCompressor.threshold.setValueAtTime(-24, recordingAudioContext.currentTime); // -24dB에서 압축 시작
-          recordingCompressor.knee.setValueAtTime(12, recordingAudioContext.currentTime); // 부드러운 압축
-          recordingCompressor.ratio.setValueAtTime(4, recordingAudioContext.currentTime); // 4:1 압축 비율
-          recordingCompressor.attack.setValueAtTime(0.003, recordingAudioContext.currentTime); // 3ms 공격
+          recordingCompressor.threshold.setValueAtTime(-50, recordingAudioContext.currentTime); // -50dB에서 압축 시작 (매우 작은 소리도 감지)
+          recordingCompressor.knee.setValueAtTime(40, recordingAudioContext.currentTime); // 넓은 범위에서 부드럽게 압축
+          recordingCompressor.ratio.setValueAtTime(12, recordingAudioContext.currentTime); // 12:1 압축 비율 (강한 압축)
+          recordingCompressor.attack.setValueAtTime(0.003, recordingAudioContext.currentTime); // 3ms 공격 (빠른 반응)
           recordingCompressor.release.setValueAtTime(0.25, recordingAudioContext.currentTime); // 250ms 릴리즈
           
-          // 메이크업 게인 (압축 후 볼륨 보상)
+          // 메이크업 게인 (압축 후 볼륨 보상 - 고감도)
           const makeupGain = recordingAudioContext.createGain();
-          makeupGain.gain.setValueAtTime(2.0, recordingAudioContext.currentTime); // 2배 증폭
+          makeupGain.gain.setValueAtTime(5.0, recordingAudioContext.currentTime); // 5배 증폭 (멀리서도 잘 들림)
           
           // 레벨 분석기
           recordingAnalyser = recordingAudioContext.createAnalyser();
