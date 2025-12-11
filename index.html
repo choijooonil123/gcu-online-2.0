@@ -2225,7 +2225,9 @@
         <div class="video-editor-panel" id="panelVolume">
           <div class="video-editor-info">
             <span class="video-editor-info-icon">💡</span>
-            영상의 소리를 키웁니다. 녹화된 강의 소리가 작을 때 유용합니다.
+            영상의 소리를 키웁니다. 녹화된 강의 소리가 작을 때 유용합니다.<br>
+            <span style="color:#fbbf24;">⚠️ 실시간 재인코딩 방식으로, 영상 길이만큼 시간이 소요됩니다.</span><br>
+            <span style="color:#93c5fd;">📁 출력 형식: MP4 (지원 시) 또는 WebM | AVI 필요시 VLC로 변환</span>
           </div>
           
           <div class="video-drop-zone" id="volumeDropZone" onclick="document.getElementById('volumeFileInput').click()">
@@ -5389,37 +5391,130 @@
       progress.classList.add('show');
 
       try {
-        // Web Audio API를 사용한 오디오 증폭
-        const audioContext = new (window.AudioContext || window.webkitAudioContext)();
         const video = document.getElementById('volumePreview');
+        const duration = video.duration;
         
-        document.getElementById('volumeProgressFill').style.width = '30%';
-        document.getElementById('volumeProgressText').textContent = '오디오 분석 중...';
+        // 진행 상태 업데이트
+        document.getElementById('volumeProgressFill').style.width = '10%';
+        document.getElementById('volumeProgressText').textContent = '오디오/비디오 준비 중...';
         
-        // 비디오에서 오디오 추출 및 증폭은 복잡하므로,
-        // 간단한 방식으로 파일을 그대로 저장하고 안내 메시지 표시
+        // Canvas로 비디오 캡처 준비
+        const canvas = document.createElement('canvas');
+        canvas.width = video.videoWidth || 1280;
+        canvas.height = video.videoHeight || 720;
+        const ctx = canvas.getContext('2d');
         
-        document.getElementById('volumeProgressFill').style.width = '100%';
-        document.getElementById('volumeProgressText').textContent = '완료!';
+        // Web Audio API로 오디오 증폭 설정
+        const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        const source = audioContext.createMediaElementSource(video);
+        const gainNode = audioContext.createGain();
+        const destination = audioContext.createMediaStreamDestination();
         
-        // 원본 파일 다운로드 (볼륨 설정 안내와 함께)
-        const url = URL.createObjectURL(volumeFile);
-        const a = document.createElement('a');
-        a.href = url;
-        const ext = getFileExtension(volumeFile.name);
-        const baseName = volumeFile.name.replace(`.${ext}`, '');
-        a.download = `${baseName}_volume_boost.${ext}`;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
+        // 볼륨 증폭 적용
+        gainNode.gain.value = volumeMultiplier;
+        source.connect(gainNode);
+        gainNode.connect(destination);
+        gainNode.connect(audioContext.destination); // 미리듣기용
         
-        alert(`✅ 파일이 저장되었습니다!\n\n🔊 볼륨 증폭 설정: ${volumeMultiplier * 100}%\n\n💡 실제 볼륨 증폭을 위해서는:\n1. VLC 미디어 플레이어에서 오디오 > 볼륨 조절\n2. 또는 무료 프로그램 Audacity 사용\n3. 또는 영상편집 프로그램에서 오디오 게인 조절\n\n브라우저 기반 볼륨 증폭은 기술적 한계가 있어\n전문 도구 사용을 권장드립니다.`);
+        // Canvas에서 비디오 스트림 생성
+        const canvasStream = canvas.captureStream(30); // 30fps
+        
+        // 오디오와 비디오 스트림 합치기
+        const combinedStream = new MediaStream([
+          ...canvasStream.getVideoTracks(),
+          ...destination.stream.getAudioTracks()
+        ]);
+        
+        // MediaRecorder로 녹화 (MP4 우선, 안되면 WebM)
+        const recordedChunks = [];
+        let mimeType = 'video/webm';
+        let fileExt = 'webm';
+        
+        // MP4 지원 확인 (Chrome, Edge 등에서 지원)
+        if (MediaRecorder.isTypeSupported('video/mp4;codecs=avc1,mp4a.40.2')) {
+          mimeType = 'video/mp4;codecs=avc1,mp4a.40.2';
+          fileExt = 'mp4';
+        } else if (MediaRecorder.isTypeSupported('video/mp4')) {
+          mimeType = 'video/mp4';
+          fileExt = 'mp4';
+        } else if (MediaRecorder.isTypeSupported('video/webm;codecs=vp9,opus')) {
+          mimeType = 'video/webm;codecs=vp9,opus';
+          fileExt = 'webm';
+        }
+        
+        const mediaRecorder = new MediaRecorder(combinedStream, { 
+          mimeType: mimeType,
+          videoBitsPerSecond: 8000000 // 8Mbps 고화질
+        });
+        
+        mediaRecorder.ondataavailable = (e) => {
+          if (e.data.size > 0) {
+            recordedChunks.push(e.data);
+          }
+        };
+        
+        // 녹화 완료 시 다운로드
+        mediaRecorder.onstop = () => {
+          const blob = new Blob(recordedChunks, { type: mimeType });
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          const baseName = volumeFile.name.replace(/\.[^/.]+$/, '');
+          a.download = `${baseName}_volume_${volumeMultiplier * 100}percent.${fileExt}`;
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+          URL.revokeObjectURL(url);
+          
+          // 오디오 컨텍스트 정리
+          source.disconnect();
+          gainNode.disconnect();
+          audioContext.close();
+          
+          document.getElementById('volumeProgressFill').style.width = '100%';
+          document.getElementById('volumeProgressText').textContent = '완료!';
+          
+          alert(`✅ 볼륨 증폭이 완료되었습니다!\n\n🔊 적용된 볼륨: ${volumeMultiplier * 100}%\n📁 파일 형식: ${fileExt.toUpperCase()}\n\n💡 AVI 형식이 필요하면 VLC에서 변환하세요:\n미디어 > 변환/저장 > AVI 선택`);
+          
+          btn.disabled = false;
+          btn.innerHTML = '🔊 소리 키우기';
+          progress.classList.remove('show');
+        };
+        
+        // 비디오 재생하면서 Canvas에 그리기 + 녹화
+        video.currentTime = 0;
+        video.muted = false;
+        
+        mediaRecorder.start(100); // 100ms 간격으로 데이터 수집
+        
+        const startTime = Date.now();
+        
+        function drawFrame() {
+          if (video.paused || video.ended) {
+            mediaRecorder.stop();
+            return;
+          }
+          
+          // Canvas에 현재 프레임 그리기
+          ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+          
+          // 진행률 업데이트
+          const progress = Math.min((video.currentTime / duration) * 100, 99);
+          document.getElementById('volumeProgressFill').style.width = `${10 + progress * 0.85}%`;
+          document.getElementById('volumeProgressText').textContent = `처리 중... ${Math.round(progress)}% (${formatDuration(video.currentTime)} / ${formatDuration(duration)})`;
+          
+          requestAnimationFrame(drawFrame);
+        }
+        
+        video.play().then(() => {
+          drawFrame();
+        }).catch(err => {
+          throw new Error('비디오 재생 실패: ' + err.message);
+        });
         
       } catch (error) {
         console.error('볼륨 조절 오류:', error);
-        alert('볼륨 조절 중 오류가 발생했습니다.');
-      } finally {
+        alert('볼륨 조절 중 오류가 발생했습니다.\n\n' + error.message + '\n\n💡 대안:\n1. VLC 미디어 플레이어에서 오디오 > 볼륨 조절\n2. 무료 프로그램 Audacity 사용\n3. 영상편집 프로그램에서 오디오 게인 조절');
         btn.disabled = false;
         btn.innerHTML = '🔊 소리 키우기';
         progress.classList.remove('show');
