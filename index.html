@@ -2052,7 +2052,7 @@
             <div class="audio-meter-bar" id="audioMeterBar"></div>
             <span class="audio-meter-label" id="audioMeterLabel">-∞ dB</span>
           </div>
-          <button class="header-btn stop-recording-btn" id="btnStopRecording" onclick="stopRecordingManual()" style="display:none;">⏹️ 녹화종료</button>
+          <button class="header-btn danger" id="btnStopRecording" onclick="stopRecordingManual()" disabled>⏹️ 녹화종료</button>
           <button class="header-btn primary" id="btnStartClass" onclick="startClass()">▶️ 수업시작</button>
           <button class="header-btn danger" id="btnEndClass" onclick="endClass()" disabled>⏹️ 수업종료</button>
           <button class="header-btn" onclick="openAttendanceModal()">📋 출석부</button>
@@ -4279,7 +4279,7 @@
         
         // UI 업데이트
         document.getElementById('recordingIndicator').style.display = 'inline-flex';
-        document.getElementById('btnStopRecording').style.display = 'inline-block';
+        document.getElementById('btnStopRecording').disabled = false;
         document.getElementById('chkRecordClass').disabled = true;
         
         console.log('🎥 수업 녹화 시작');
@@ -4314,7 +4314,7 @@
       
       // UI 업데이트
       document.getElementById('recordingIndicator').style.display = 'none';
-      document.getElementById('btnStopRecording').style.display = 'none';
+      document.getElementById('btnStopRecording').disabled = true;
       document.getElementById('audioMeterContainer').style.display = 'none';
       document.getElementById('chkRecordClass').disabled = false;
     }
@@ -4411,7 +4411,10 @@
       // File System Access API 지원 여부 확인 (저장 위치 선택 가능)
       if ('showSaveFilePicker' in window) {
         try {
-          const fileTypes = [{ description: 'AVI 비디오 파일', accept: { 'video/x-msvideo': ['.avi'] } }];
+          // 실제 녹화 형식에 맞는 파일 타입 설정
+          const fileTypes = recordingExtension === 'mp4' 
+            ? [{ description: 'MP4 비디오 파일', accept: { 'video/mp4': ['.mp4'] } }]
+            : [{ description: 'WebM 비디오 파일', accept: { 'video/webm': ['.webm'] } }];
           
           const fileHandle = await window.showSaveFilePicker({
             suggestedName: fileName,
