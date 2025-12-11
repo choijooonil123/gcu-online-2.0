@@ -4209,15 +4209,42 @@
           
           console.log('🎚️ 자동 감도 조절 활성화됨');
         } else if (micStream) {
-          // 자동 감도 비활성화 - 단순 스트림 합성
-          const audioTracks = [
-            ...displayStream.getAudioTracks(),
-            ...micStream.getAudioTracks()
-          ];
-          const videoTracks = displayStream.getVideoTracks();
-          combinedStream = new MediaStream([...videoTracks, ...audioTracks]);
+          // 자동 감도 비활성화 - Web Audio API로 믹싱 (컴프레서 없이)
+          recordingAudioContext = new (window.AudioContext || window.webkitAudioContext)();
           
-          console.log('🎚️ 자동 감도 조절 비활성화됨');
+          // 마이크 소스
+          const micSource = recordingAudioContext.createMediaStreamSource(micStream);
+          
+          // 화면 오디오 소스 (있으면)
+          let displayAudioSource = null;
+          if (displayStream.getAudioTracks().length > 0) {
+            displayAudioSource = recordingAudioContext.createMediaStreamSource(
+              new MediaStream(displayStream.getAudioTracks())
+            );
+          }
+          
+          // 출력 노드
+          const destination = recordingAudioContext.createMediaStreamDestination();
+          
+          // 마이크 직접 연결 (컴프레서 없이)
+          micSource.connect(destination);
+          
+          // 화면 오디오도 출력에 연결
+          if (displayAudioSource) {
+            displayAudioSource.connect(destination);
+          }
+          
+          // 스트림 합성 (믹싱된 오디오 + 비디오)
+          const videoTracks = displayStream.getVideoTracks();
+          combinedStream = new MediaStream([
+            ...videoTracks,
+            ...destination.stream.getAudioTracks()
+          ]);
+          
+          console.log('🎚️ 자동 감도 비활성화됨 (오디오 믹싱은 활성화)');
+        } else {
+          // 마이크 없이 화면만 녹화
+          console.log('🎤 마이크 없이 화면/시스템 오디오만 녹화');
         }
 
         recordingStream = combinedStream;
