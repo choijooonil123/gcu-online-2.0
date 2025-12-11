@@ -1640,7 +1640,7 @@
   <div class="login-overlay" id="loginOverlay">
     <div class="login-container">
       <div class="login-header">
-        <h1>🎓 온라인 강의실 🎓</h1>
+        <h1>🎓 온라인 강의실(2.0) 🎓</h1>
     </div>
 
       <!-- 역할 선택 -->
@@ -4983,12 +4983,19 @@
     }
 
     // 드롭존 초기화
-    document.addEventListener('DOMContentLoaded', () => {
+    function initDropZones() {
       setupDropZone('mergeDropZone', (files) => handleMergeFilesInternal(files));
       setupDropZone('splitDropZone', (files) => handleSplitFileInternal(files[0]));
       setupDropZone('trimDropZone', (files) => handleTrimFileInternal(files[0]));
       setupDropZone('volumeDropZone', (files) => handleVolumeFileInternal(files[0]));
-    });
+    }
+    
+    // DOM이 이미 로드되었으면 바로 실행, 아니면 이벤트 대기
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', initDropZones);
+    } else {
+      initDropZones();
+    }
 
     // ===== 영상 결합 =====
     function handleMergeFiles(event) {
