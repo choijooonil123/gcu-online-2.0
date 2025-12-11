@@ -505,6 +505,46 @@
       align-items: center;
       gap: 6px;
       padding: 6px 12px;
+
+    /* 오디오 레벨 미터 */
+    .audio-meter-container {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 8px;
+      background: #1f2937;
+      border-radius: 6px;
+      border: 1px solid #374151;
+    }
+
+    .audio-meter-bar {
+      width: 60px;
+      height: 8px;
+      background: #374151;
+      border-radius: 4px;
+      overflow: hidden;
+      position: relative;
+    }
+
+    .audio-meter-bar::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      height: 100%;
+      width: var(--level, 0%);
+      background: linear-gradient(90deg, #22c55e 0%, #22c55e 60%, #eab308 60%, #eab308 80%, #ef4444 80%, #ef4444 100%);
+      background-size: 100% 100%;
+      border-radius: 4px;
+      transition: width 0.05s ease-out;
+    }
+
+    .audio-meter-label {
+      font-size: 10px;
+      color: #9ca3af;
+      font-family: 'Consolas', monospace;
+      min-width: 45px;
+    }
       background: #1f2937;
       border: 1px solid #374151;
       border-radius: 6px;
@@ -2004,6 +2044,14 @@
             <input type="checkbox" id="chkRecordClass" checked>
             <span class="record-checkbox-text">🎥 녹화시작</span>
           </label>
+          <label class="record-checkbox-label" title="마이크 소리가 작으면 키우고, 크면 줄여서 일정하게 유지합니다">
+            <input type="checkbox" id="chkAutoGain" checked>
+            <span class="record-checkbox-text">🎚️ 자동감도</span>
+          </label>
+          <div class="audio-meter-container" id="audioMeterContainer" style="display:none;">
+            <div class="audio-meter-bar" id="audioMeterBar"></div>
+            <span class="audio-meter-label" id="audioMeterLabel">-∞ dB</span>
+          </div>
           <button class="header-btn stop-recording-btn" id="btnStopRecording" onclick="stopRecordingManual()" style="display:none;">⏹️ 녹화종료</button>
           <button class="header-btn primary" id="btnStartClass" onclick="startClass()">▶️ 수업시작</button>
           <button class="header-btn danger" id="btnEndClass" onclick="endClass()" disabled>⏹️ 수업종료</button>
@@ -2357,7 +2405,9 @@
         <div class="video-editor-panel active" id="panelMerge">
           <div class="video-editor-info">
             <span class="video-editor-info-icon">💡</span>
-            여러 영상을 하나로 합칩니다. 순서를 변경하려면 ⬆️⬇️ 버튼을 사용하세요.
+            여러 영상을 하나로 합칩니다. 순서를 변경하려면 ⬆️⬇️ 버튼을 사용하세요.<br>
+            <span style="color:#fbbf24;">⚠️ 전체 영상 길이만큼 시간이 소요됩니다.</span>
+            <span style="color:#93c5fd;">| 출력: MP4 (또는 WebM)</span>
           </div>
           
           <div class="video-drop-zone" id="mergeDropZone" onclick="document.getElementById('mergeFileInput').click()">
@@ -2385,7 +2435,9 @@
         <div class="video-editor-panel" id="panelSplit">
           <div class="video-editor-info">
             <span class="video-editor-info-icon">💡</span>
-            영상을 여러 개로 분리합니다. 시간 또는 개수로 나눌 수 있습니다.
+            영상을 여러 개로 분리합니다. 시간 또는 개수로 나눌 수 있습니다.<br>
+            <span style="color:#fbbf24;">⚠️ 전체 영상 길이만큼 시간이 소요됩니다.</span>
+            <span style="color:#93c5fd;">| 출력: MP4 (또는 WebM)</span>
           </div>
           
           <div class="video-drop-zone" id="splitDropZone" onclick="document.getElementById('splitFileInput').click()">
@@ -2455,6 +2507,10 @@
           
           <!-- 유튜브 스타일 트림 UI -->
           <div class="yt-trim-container" id="ytTrimContainer" style="display:none;">
+            <div class="video-editor-info" style="margin-bottom:12px; background:rgba(255,204,0,0.1); border-color:rgba(255,204,0,0.3);">
+              <span style="color:#ffcc00;">⚠️ 선택한 구간을 실시간으로 재인코딩합니다.</span><br>
+              <span style="color:#aaa;">선택 구간 길이 = 처리 시간 | 출력: MP4 (또는 WebM)</span>
+            </div>
             <!-- 비디오 미리보기 -->
             <div class="yt-video-preview">
               <video id="trimPreview"></video>
@@ -2525,7 +2581,7 @@
             <span class="video-editor-info-icon">💡</span>
             영상의 소리를 키웁니다. 녹화된 강의 소리가 작을 때 유용합니다.<br>
             <span style="color:#fbbf24;">⚠️ 영상이 실시간 재생되며 처리됩니다 (영상 길이 = 처리 시간)</span><br>
-            <span style="color:#93c5fd;">📁 출력: WebM 형식 | 처리 중 다른 탭으로 이동하지 마세요!</span>
+            <span style="color:#93c5fd;">📁 출력: MP4 (또는 WebM) | 처리 중 다른 탭으로 이동하지 마세요!</span>
           </div>
           
           <div class="video-drop-zone" id="volumeDropZone" onclick="document.getElementById('volumeFileInput').click()">
@@ -2593,7 +2649,13 @@
     let currentSession = 1;  // 현재 차시
     let sessionCountByWeek = {};  // 주차별 차시 누적 카운트 { 주차: 차시 }
     let recordingMimeType = 'video/mp4';  // 녹화 형식
-    let recordingExtension = 'avi';  // 파일 확장자
+    let recordingExtension = 'mp4';  // 파일 확장자 (MP4 우선, WebM 폴백)
+    
+    // 오디오 자동 감도 조절 관련 변수
+    let recordingAudioContext = null;
+    let recordingAnalyser = null;
+    let recordingCompressor = null;
+    let audioMeterAnimationId = null;
     
     // 주차별 차시 카운트 로드
     function loadSessionCount() {
@@ -4072,24 +4134,90 @@
 
         // 마이크 오디오 추가 시도
         let combinedStream = displayStream;
+        let micStream = null;
+        
         try {
-          const audioStream = await navigator.mediaDevices.getUserMedia({
+          micStream = await navigator.mediaDevices.getUserMedia({
             audio: {
               echoCancellation: true,
-              noiseSuppression: true
+              noiseSuppression: true,
+              autoGainControl: false // 브라우저 AGC 비활성화 (우리가 직접 처리)
             }
           });
+        } catch (audioErr) {
+          console.log('마이크 접근 실패:', audioErr);
+        }
+        
+        // 자동 감도 조절 활성화 여부 확인
+        const useAutoGain = document.getElementById('chkAutoGain')?.checked;
+        
+        if (micStream && useAutoGain) {
+          // Web Audio API로 오디오 처리
+          recordingAudioContext = new (window.AudioContext || window.webkitAudioContext)();
           
-          // 스트림 합성
+          // 마이크 소스
+          const micSource = recordingAudioContext.createMediaStreamSource(micStream);
+          
+          // 화면 오디오 소스 (있으면)
+          let displayAudioSource = null;
+          if (displayStream.getAudioTracks().length > 0) {
+            displayAudioSource = recordingAudioContext.createMediaStreamSource(
+              new MediaStream(displayStream.getAudioTracks())
+            );
+          }
+          
+          // 컴프레서 생성 (OBS 스타일 자동 감도 조절)
+          recordingCompressor = recordingAudioContext.createDynamicsCompressor();
+          recordingCompressor.threshold.setValueAtTime(-24, recordingAudioContext.currentTime); // -24dB에서 압축 시작
+          recordingCompressor.knee.setValueAtTime(12, recordingAudioContext.currentTime); // 부드러운 압축
+          recordingCompressor.ratio.setValueAtTime(4, recordingAudioContext.currentTime); // 4:1 압축 비율
+          recordingCompressor.attack.setValueAtTime(0.003, recordingAudioContext.currentTime); // 3ms 공격
+          recordingCompressor.release.setValueAtTime(0.25, recordingAudioContext.currentTime); // 250ms 릴리즈
+          
+          // 메이크업 게인 (압축 후 볼륨 보상)
+          const makeupGain = recordingAudioContext.createGain();
+          makeupGain.gain.setValueAtTime(2.0, recordingAudioContext.currentTime); // 2배 증폭
+          
+          // 레벨 분석기
+          recordingAnalyser = recordingAudioContext.createAnalyser();
+          recordingAnalyser.fftSize = 256;
+          recordingAnalyser.smoothingTimeConstant = 0.3;
+          
+          // 출력 노드
+          const destination = recordingAudioContext.createMediaStreamDestination();
+          
+          // 마이크 → 컴프레서 → 게인 → 분석기 → 출력
+          micSource.connect(recordingCompressor);
+          recordingCompressor.connect(makeupGain);
+          makeupGain.connect(recordingAnalyser);
+          recordingAnalyser.connect(destination);
+          
+          // 화면 오디오도 출력에 연결 (컴프레서 없이)
+          if (displayAudioSource) {
+            displayAudioSource.connect(destination);
+          }
+          
+          // 스트림 합성 (처리된 오디오 + 비디오)
+          const videoTracks = displayStream.getVideoTracks();
+          combinedStream = new MediaStream([
+            ...videoTracks,
+            ...destination.stream.getAudioTracks()
+          ]);
+          
+          // 오디오 레벨 미터 시작
+          startAudioMeter();
+          
+          console.log('🎚️ 자동 감도 조절 활성화됨');
+        } else if (micStream) {
+          // 자동 감도 비활성화 - 단순 스트림 합성
           const audioTracks = [
             ...displayStream.getAudioTracks(),
-            ...audioStream.getAudioTracks()
+            ...micStream.getAudioTracks()
           ];
           const videoTracks = displayStream.getVideoTracks();
-          
           combinedStream = new MediaStream([...videoTracks, ...audioTracks]);
-        } catch (audioErr) {
-          console.log('마이크 접근 실패, 화면 오디오만 녹화:', audioErr);
+          
+          console.log('🎚️ 자동 감도 조절 비활성화됨');
         }
 
         recordingStream = combinedStream;
@@ -4098,25 +4226,29 @@
         // MediaRecorder 생성 (MP4 우선, 미지원 시 WebM 폴백)
         let options = { mimeType: 'video/mp4;codecs=avc1,mp4a.40.2' };
         
-        // 코덱 선택 (MP4 우선, WebM 폴백) - 확장자는 .mpeg으로 통일
+        // 코덱 선택 (MP4 우선, WebM 폴백)
         if (MediaRecorder.isTypeSupported(options.mimeType)) {
           recordingMimeType = 'video/mp4';
+          recordingExtension = 'mp4';
         } else if (MediaRecorder.isTypeSupported('video/mp4')) {
           options.mimeType = 'video/mp4';
           recordingMimeType = 'video/mp4';
+          recordingExtension = 'mp4';
         } else if (MediaRecorder.isTypeSupported('video/webm;codecs=vp9,opus')) {
           options.mimeType = 'video/webm;codecs=vp9,opus';
           recordingMimeType = 'video/webm';
+          recordingExtension = 'webm';
         } else if (MediaRecorder.isTypeSupported('video/webm;codecs=vp8,opus')) {
           options.mimeType = 'video/webm;codecs=vp8,opus';
           recordingMimeType = 'video/webm';
+          recordingExtension = 'webm';
         } else {
           options.mimeType = 'video/webm';
           recordingMimeType = 'video/webm';
+          recordingExtension = 'webm';
         }
-        recordingExtension = 'avi';  // 확장자는 항상 .avi
         
-        console.log('🎥 녹화 형식:', options.mimeType);
+        console.log('🎥 녹화 형식:', options.mimeType, '확장자:', recordingExtension);
 
         mediaRecorder = new MediaRecorder(combinedStream, options);
         
@@ -4171,10 +4303,81 @@
         recordingStream = null;
       }
       
+      // 오디오 컨텍스트 정리
+      stopAudioMeter();
+      if (recordingAudioContext) {
+        try { recordingAudioContext.close(); } catch(e) {}
+        recordingAudioContext = null;
+        recordingAnalyser = null;
+        recordingCompressor = null;
+      }
+      
       // UI 업데이트
       document.getElementById('recordingIndicator').style.display = 'none';
       document.getElementById('btnStopRecording').style.display = 'none';
+      document.getElementById('audioMeterContainer').style.display = 'none';
       document.getElementById('chkRecordClass').disabled = false;
+    }
+    
+    // 오디오 레벨 미터 시작
+    function startAudioMeter() {
+      const meterContainer = document.getElementById('audioMeterContainer');
+      const meterBar = document.getElementById('audioMeterBar');
+      const meterLabel = document.getElementById('audioMeterLabel');
+      
+      if (!recordingAnalyser) return;
+      
+      meterContainer.style.display = 'flex';
+      
+      const dataArray = new Uint8Array(recordingAnalyser.frequencyBinCount);
+      
+      function updateMeter() {
+        if (!recordingAnalyser) {
+          stopAudioMeter();
+          return;
+        }
+        
+        recordingAnalyser.getByteFrequencyData(dataArray);
+        
+        // RMS 계산
+        let sum = 0;
+        for (let i = 0; i < dataArray.length; i++) {
+          sum += dataArray[i] * dataArray[i];
+        }
+        const rms = Math.sqrt(sum / dataArray.length);
+        
+        // dB 변환 (-60dB ~ 0dB 범위)
+        const db = rms > 0 ? 20 * Math.log10(rms / 255) : -60;
+        const normalizedDb = Math.max(-60, Math.min(0, db));
+        
+        // 퍼센트로 변환 (0% = -60dB, 100% = 0dB)
+        const percent = ((normalizedDb + 60) / 60) * 100;
+        
+        // UI 업데이트
+        meterBar.style.setProperty('--level', `${percent}%`);
+        meterLabel.textContent = `${normalizedDb.toFixed(0)} dB`;
+        
+        // 색상 변경 (클리핑 경고)
+        if (normalizedDb > -3) {
+          meterLabel.style.color = '#ef4444';
+        } else if (normalizedDb > -12) {
+          meterLabel.style.color = '#eab308';
+        } else {
+          meterLabel.style.color = '#9ca3af';
+        }
+        
+        audioMeterAnimationId = requestAnimationFrame(updateMeter);
+      }
+      
+      updateMeter();
+    }
+    
+    // 오디오 레벨 미터 중지
+    function stopAudioMeter() {
+      if (audioMeterAnimationId) {
+        cancelAnimationFrame(audioMeterAnimationId);
+        audioMeterAnimationId = null;
+      }
     }
 
     // 수동 녹화 종료 (버튼 클릭)
@@ -5351,6 +5554,9 @@
       renderMergeList();
     }
 
+    // 영상 결합용 전역 변수
+    let mergeAudioContext = null;
+
     async function mergeVideos() {
       if (mergeFiles.length < 2) {
         alert('최소 2개의 영상을 추가해주세요.');
@@ -5361,38 +5567,194 @@
       const progress = document.getElementById('mergeProgress');
       
       btn.disabled = true;
-      btn.innerHTML = '⏳ 처리 중...';
+      btn.innerHTML = '⏳ 준비 중...';
       progress.classList.add('show');
+      
+      document.getElementById('mergeProgressFill').style.width = '5%';
+      document.getElementById('mergeProgressText').textContent = '영상 분석 중...';
 
       try {
-        // FFmpeg 없이 Blob 기반 간단 결합 (동일 코덱 가정)
-        const blobs = [];
-        for (const file of mergeFiles) {
-          blobs.push(await file.arrayBuffer());
+        // 기존 오디오 컨텍스트 정리
+        if (mergeAudioContext) {
+          try { mergeAudioContext.close(); } catch(e) {}
         }
         
-        // 단순 결합 방식 - MediaSource를 사용한 결합
-        const mergedBlob = new Blob(blobs.map(b => new Uint8Array(b)), { type: mergeFiles[0].type });
+        // 각 영상의 정보 수집
+        const videoInfos = [];
+        let totalDuration = 0;
+        let maxWidth = 0;
+        let maxHeight = 0;
         
-        // 다운로드
-        const url = URL.createObjectURL(mergedBlob);
+        for (let i = 0; i < mergeFiles.length; i++) {
+          const file = mergeFiles[i];
+          const tempVideo = document.createElement('video');
+          tempVideo.src = URL.createObjectURL(file);
+          
+          await new Promise((resolve, reject) => {
+            tempVideo.onloadedmetadata = resolve;
+            tempVideo.onerror = () => reject(new Error(`${file.name} 로드 실패`));
+          });
+          
+          videoInfos.push({
+            file,
+            video: tempVideo,
+            duration: tempVideo.duration
+          });
+          
+          totalDuration += tempVideo.duration;
+          maxWidth = Math.max(maxWidth, tempVideo.videoWidth || 1280);
+          maxHeight = Math.max(maxHeight, tempVideo.videoHeight || 720);
+        }
+        
+        document.getElementById('mergeProgressFill').style.width = '10%';
+        document.getElementById('mergeProgressText').textContent = '녹화 준비 중...';
+        
+        // Canvas 준비
+        const canvas = document.createElement('canvas');
+        canvas.width = maxWidth;
+        canvas.height = maxHeight;
+        const ctx = canvas.getContext('2d');
+        
+        // 첫 번째 비디오로 오디오 컨텍스트 생성
+        mergeAudioContext = new (window.AudioContext || window.webkitAudioContext)();
+        
+        // MediaRecorder 설정 (MP4 우선)
+        const canvasStream = canvas.captureStream(30);
+        const recordedChunks = [];
+        let mimeType = 'video/webm';
+        let fileExt = 'webm';
+        
+        if (MediaRecorder.isTypeSupported('video/mp4;codecs=avc1.42E01E,mp4a.40.2')) {
+          mimeType = 'video/mp4;codecs=avc1.42E01E,mp4a.40.2';
+          fileExt = 'mp4';
+        } else if (MediaRecorder.isTypeSupported('video/mp4')) {
+          mimeType = 'video/mp4';
+          fileExt = 'mp4';
+        } else if (MediaRecorder.isTypeSupported('video/webm;codecs=vp9,opus')) {
+          mimeType = 'video/webm;codecs=vp9,opus';
+        }
+        
+        console.log('🔗 결합 녹화 형식:', mimeType);
+        
+        // 순차적으로 각 영상 재생 및 녹화
+        let processedDuration = 0;
+        
+        for (let i = 0; i < videoInfos.length; i++) {
+          const info = videoInfos[i];
+          const video = info.video;
+          
+          document.getElementById('mergeProgressText').textContent = 
+            `영상 ${i + 1}/${videoInfos.length} 처리 중...`;
+          
+          // 오디오 설정
+          const source = mergeAudioContext.createMediaElementSource(video);
+          const destination = mergeAudioContext.createMediaStreamDestination();
+          source.connect(destination);
+          
+          // 스트림 생성
+          const combinedStream = new MediaStream([
+            ...canvasStream.getVideoTracks(),
+            ...destination.stream.getAudioTracks()
+          ]);
+          
+          // 첫 영상에서만 MediaRecorder 시작
+          let mediaRecorder;
+          if (i === 0) {
+            mediaRecorder = new MediaRecorder(combinedStream, { 
+              mimeType, 
+              videoBitsPerSecond: 5000000 
+            });
+            mediaRecorder.ondataavailable = (e) => {
+              if (e.data.size > 0) recordedChunks.push(e.data);
+            };
+            mediaRecorder.start(100);
+          }
+          
+          // 비디오 재생 및 캔버스에 그리기
+          video.currentTime = 0;
+          await video.play();
+          
+          await new Promise((resolve) => {
+            function drawFrame() {
+              if (video.ended || video.paused) {
+                source.disconnect();
+                resolve();
+                return;
+              }
+              
+              // 캔버스에 그리기 (중앙 정렬)
+              ctx.fillStyle = '#000';
+              ctx.fillRect(0, 0, canvas.width, canvas.height);
+              
+              const scale = Math.min(
+                canvas.width / video.videoWidth,
+                canvas.height / video.videoHeight
+              );
+              const w = video.videoWidth * scale;
+              const h = video.videoHeight * scale;
+              const x = (canvas.width - w) / 2;
+              const y = (canvas.height - h) / 2;
+              
+              ctx.drawImage(video, x, y, w, h);
+              
+              // 진행률 업데이트
+              const currentTotal = processedDuration + video.currentTime;
+              const percent = Math.min((currentTotal / totalDuration) * 100, 99);
+              document.getElementById('mergeProgressFill').style.width = `${10 + percent * 0.85}%`;
+              
+              requestAnimationFrame(drawFrame);
+            }
+            
+            video.onended = () => {
+              source.disconnect();
+              resolve();
+            };
+            
+            drawFrame();
+          });
+          
+          processedDuration += info.duration;
+          
+          // 마지막 영상이면 녹화 중지
+          if (i === videoInfos.length - 1) {
+            // mediaRecorder 찾기
+            const recorder = recordedChunks.length > 0 ? 
+              document.querySelector('video')?.srcObject?.getVideoTracks()[0]?.getSettings()?.mediaRecorder : null;
+          }
+        }
+        
+        // 녹화 중지를 위해 약간 대기
+        await new Promise(r => setTimeout(r, 500));
+        
+        // Blob 생성 및 다운로드
+        const blob = new Blob(recordedChunks, { type: mimeType });
+        const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        a.download = `merged_${Date.now()}.${getFileExtension(mergeFiles[0].name)}`;
+        a.download = `merged_${Date.now()}.${fileExt}`;
         document.body.appendChild(a);
         a.click();
         document.body.removeChild(a);
         URL.revokeObjectURL(url);
         
-        alert('✅ 영상 결합이 완료되었습니다!\n\n참고: 동일한 코덱의 영상만 정상적으로 결합됩니다.\n다른 형식의 영상은 전문 편집 프로그램을 사용해주세요.');
+        // 정리
+        videoInfos.forEach(info => {
+          URL.revokeObjectURL(info.video.src);
+          info.video.remove();
+        });
+        
+        document.getElementById('mergeProgressFill').style.width = '100%';
+        document.getElementById('mergeProgressText').textContent = '완료!';
+        
+        alert(`✅ 영상 결합 완료!\n\n📁 형식: ${fileExt.toUpperCase()}\n⏱ 총 길이: ${formatTimeShort(totalDuration)}\n🎬 결합된 영상: ${mergeFiles.length}개`);
         
       } catch (error) {
         console.error('영상 결합 오류:', error);
-        alert('영상 결합 중 오류가 발생했습니다.\n\n브라우저에서 지원하지 않는 형식이거나 파일이 너무 클 수 있습니다.');
+        alert(`❌ 영상 결합 실패\n\n오류: ${error.message}\n\n💡 대안:\n- 모든 영상이 정상 파일인지 확인\n- 브라우저를 새로고침 후 다시 시도`);
       } finally {
         btn.disabled = false;
         btn.innerHTML = '🔗 영상 결합하기';
-        progress.classList.remove('show');
+        setTimeout(() => progress.classList.remove('show'), 2000);
       }
     }
 
@@ -5431,97 +5793,227 @@
       document.getElementById('splitTimeInput').style.display = option === 'time' ? 'flex' : 'none';
     }
 
+    // 영상 분리용 전역 변수
+    let splitAudioContext = null;
+    let splitProcessingVideo = null;
+
     async function splitVideo() {
       if (!splitFile) {
         alert('분리할 영상을 선택해주세요.');
         return;
       }
 
-      const video = document.getElementById('splitPreview');
-      const duration = video.duration;
+      const previewVideo = document.getElementById('splitPreview');
+      const duration = previewVideo.duration;
       
-      let splitPoints = [];
+      // 분할 구간 계산
+      const segments = [];
+      let splitPoints = [0];
       
       if (splitOption === 'count') {
         const count = parseInt(document.getElementById('splitCount').value) || 2;
         const segmentDuration = duration / count;
-        for (let i = 1; i < count; i++) {
-          splitPoints.push(segmentDuration * i);
+        for (let i = 1; i <= count; i++) {
+          splitPoints.push(Math.min(segmentDuration * i, duration));
         }
       } else {
         const interval = parseInt(document.getElementById('splitInterval').value) || 300;
         for (let t = interval; t < duration; t += interval) {
           splitPoints.push(t);
         }
+        splitPoints.push(duration);
+      }
+      
+      // 구간 생성
+      for (let i = 0; i < splitPoints.length - 1; i++) {
+        segments.push({
+          start: splitPoints[i],
+          end: splitPoints[i + 1],
+          index: i + 1
+        });
       }
 
       const btn = document.getElementById('btnSplitVideo');
       const progress = document.getElementById('splitProgress');
       
       btn.disabled = true;
-      btn.innerHTML = '⏳ 처리 중...';
+      btn.innerHTML = '⏳ 준비 중...';
       progress.classList.add('show');
 
       try {
-        // 분할 포인트가 없으면 안내
-        if (splitPoints.length === 0) {
+        if (segments.length < 2) {
           alert('영상이 너무 짧아 분리할 수 없습니다.');
           return;
         }
-
-        // 간단한 방식: 각 구간별로 Blob slice (실제로는 re-encoding 필요)
-        const segments = [];
-        const fileBuffer = await splitFile.arrayBuffer();
-        const segmentCount = splitPoints.length + 1;
-        const bytesPerSecond = fileBuffer.byteLength / duration;
         
-        let startTime = 0;
-        for (let i = 0; i <= splitPoints.length; i++) {
-          const endTime = i < splitPoints.length ? splitPoints[i] : duration;
-          const startByte = Math.floor(startTime * bytesPerSecond);
-          const endByte = Math.floor(endTime * bytesPerSecond);
-          
-          segments.push({
-            data: fileBuffer.slice(startByte, endByte),
-            index: i + 1
-          });
-          
-          startTime = endTime;
-          
-          // 진행률 업데이트
-          const percent = Math.round(((i + 1) / segmentCount) * 100);
-          document.getElementById('splitProgressFill').style.width = `${percent}%`;
-          document.getElementById('splitProgressText').textContent = `분리 중... ${i + 1}/${segmentCount}`;
+        // MIME 타입 결정 (MP4 우선)
+        let mimeType = 'video/webm';
+        let fileExt = 'webm';
+        
+        if (MediaRecorder.isTypeSupported('video/mp4;codecs=avc1.42E01E,mp4a.40.2')) {
+          mimeType = 'video/mp4;codecs=avc1.42E01E,mp4a.40.2';
+          fileExt = 'mp4';
+        } else if (MediaRecorder.isTypeSupported('video/mp4')) {
+          mimeType = 'video/mp4';
+          fileExt = 'mp4';
+        } else if (MediaRecorder.isTypeSupported('video/webm;codecs=vp9,opus')) {
+          mimeType = 'video/webm;codecs=vp9,opus';
         }
         
-        // 각 세그먼트 다운로드
-        const ext = getFileExtension(splitFile.name);
-        const baseName = splitFile.name.replace(`.${ext}`, '');
+        console.log('✂️ 분리 녹화 형식:', mimeType);
         
-        for (const seg of segments) {
-          const blob = new Blob([new Uint8Array(seg.data)], { type: splitFile.type });
+        const baseName = splitFile.name.replace(/\.[^/.]+$/, '');
+        const totalSegments = segments.length;
+        
+        // 각 구간별로 처리
+        for (let segIdx = 0; segIdx < segments.length; segIdx++) {
+          const seg = segments[segIdx];
+          const segDuration = seg.end - seg.start;
+          
+          document.getElementById('splitProgressText').textContent = 
+            `구간 ${segIdx + 1}/${totalSegments} 처리 중... (${formatTimeShort(seg.start)} ~ ${formatTimeShort(seg.end)})`;
+          
+          // 새 비디오 요소 생성
+          if (splitProcessingVideo) {
+            splitProcessingVideo.remove();
+          }
+          splitProcessingVideo = document.createElement('video');
+          splitProcessingVideo.src = URL.createObjectURL(splitFile);
+          splitProcessingVideo.style.display = 'none';
+          document.body.appendChild(splitProcessingVideo);
+          
+          await new Promise((resolve, reject) => {
+            splitProcessingVideo.onloadedmetadata = resolve;
+            splitProcessingVideo.onerror = () => reject(new Error('영상 로드 실패'));
+          });
+          
+          const videoWidth = splitProcessingVideo.videoWidth || 1280;
+          const videoHeight = splitProcessingVideo.videoHeight || 720;
+          
+          // Canvas 준비
+          const canvas = document.createElement('canvas');
+          canvas.width = videoWidth;
+          canvas.height = videoHeight;
+          const ctx = canvas.getContext('2d');
+          
+          // 오디오 컨텍스트
+          if (splitAudioContext) {
+            try { splitAudioContext.close(); } catch(e) {}
+          }
+          splitAudioContext = new (window.AudioContext || window.webkitAudioContext)();
+          const source = splitAudioContext.createMediaElementSource(splitProcessingVideo);
+          const destination = splitAudioContext.createMediaStreamDestination();
+          source.connect(destination);
+          
+          // 스트림 및 MediaRecorder
+          const canvasStream = canvas.captureStream(30);
+          const combinedStream = new MediaStream([
+            ...canvasStream.getVideoTracks(),
+            ...destination.stream.getAudioTracks()
+          ]);
+          
+          const recordedChunks = [];
+          const mediaRecorder = new MediaRecorder(combinedStream, { 
+            mimeType, 
+            videoBitsPerSecond: 5000000 
+          });
+          
+          mediaRecorder.ondataavailable = (e) => {
+            if (e.data.size > 0) recordedChunks.push(e.data);
+          };
+          
+          const recordingComplete = new Promise((resolve) => {
+            mediaRecorder.onstop = () => {
+              const blob = new Blob(recordedChunks, { type: mimeType });
+              resolve(blob);
+            };
+          });
+          
+          // 시작점으로 이동
+          splitProcessingVideo.currentTime = seg.start;
+          await new Promise(resolve => {
+            splitProcessingVideo.onseeked = resolve;
+          });
+          
+          // 녹화 시작
+          mediaRecorder.start(100);
+          
+          // 프레임 그리기
+          let isRecording = true;
+          function drawFrame() {
+            if (!isRecording) return;
+            
+            ctx.drawImage(splitProcessingVideo, 0, 0, canvas.width, canvas.height);
+            
+            const elapsed = splitProcessingVideo.currentTime - seg.start;
+            const segProgress = Math.min(elapsed / segDuration, 1);
+            const overallProgress = ((segIdx + segProgress) / totalSegments) * 100;
+            
+            document.getElementById('splitProgressFill').style.width = `${overallProgress}%`;
+            
+            if (splitProcessingVideo.currentTime >= seg.end || splitProcessingVideo.ended) {
+              isRecording = false;
+              splitProcessingVideo.pause();
+              setTimeout(() => mediaRecorder.stop(), 300);
+              return;
+            }
+            
+            requestAnimationFrame(drawFrame);
+          }
+          
+          splitProcessingVideo.ontimeupdate = () => {
+            if (splitProcessingVideo.currentTime >= seg.end) {
+              isRecording = false;
+              splitProcessingVideo.pause();
+              if (mediaRecorder.state === 'recording') {
+                setTimeout(() => mediaRecorder.stop(), 300);
+              }
+            }
+          };
+          
+          // 재생 시작
+          await splitProcessingVideo.play();
+          drawFrame();
+          
+          // 녹화 완료 대기
+          const blob = await recordingComplete;
+          
+          // 다운로드
           const url = URL.createObjectURL(blob);
           const a = document.createElement('a');
           a.href = url;
-          a.download = `${baseName}_part${seg.index}.${ext}`;
+          a.download = `${baseName}_part${seg.index}.${fileExt}`;
           document.body.appendChild(a);
           a.click();
           document.body.removeChild(a);
           URL.revokeObjectURL(url);
           
-          // 다운로드 간격
+          // 정리
+          splitProcessingVideo.remove();
+          splitProcessingVideo = null;
+          
+          // 다음 구간 전 잠시 대기
           await new Promise(r => setTimeout(r, 500));
         }
         
-        alert(`✅ 영상이 ${segmentCount}개로 분리되었습니다!\n\n참고: 단순 분리 방식입니다.\n정확한 시간 기준 분리는 전문 편집 프로그램을 사용해주세요.`);
+        document.getElementById('splitProgressFill').style.width = '100%';
+        document.getElementById('splitProgressText').textContent = '완료!';
+        
+        alert(`✅ 영상 분리 완료!\n\n📁 형식: ${fileExt.toUpperCase()}\n🎬 분리된 구간: ${totalSegments}개`);
         
       } catch (error) {
         console.error('영상 분리 오류:', error);
-        alert('영상 분리 중 오류가 발생했습니다.');
+        
+        if (splitProcessingVideo) {
+          splitProcessingVideo.remove();
+          splitProcessingVideo = null;
+        }
+        
+        alert(`❌ 영상 분리 실패\n\n오류: ${error.message}`);
       } finally {
         btn.disabled = false;
         btn.innerHTML = '✂️ 영상 분리하기';
-        progress.classList.remove('show');
+        setTimeout(() => progress.classList.remove('show'), 2000);
       }
     }
 
@@ -5778,6 +6270,10 @@
     function setTrimEnd() { setYtTrimEnd(); }
     function updateTrimPreview() { updateYtTrimUI(); }
 
+    // 트림용 전역 변수
+    let trimProcessingVideo = null;
+    let trimAudioContext = null;
+
     async function trimVideo() {
       if (!trimFile) {
         alert('자를 영상을 선택해주세요.');
@@ -5786,6 +6282,7 @@
 
       const startTime = ytTrimStart;
       const endTime = ytTrimEnd;
+      const clipDuration = endTime - startTime;
       
       if (startTime >= endTime) {
         alert('종료 시간이 시작 시간보다 커야 합니다.');
@@ -5796,49 +6293,187 @@
       const progress = document.getElementById('trimProgress');
       
       btn.disabled = true;
-      btn.innerHTML = '⏳ 처리 중...';
+      btn.innerHTML = '⏳ 준비 중...';
       progress.classList.add('show');
+      
+      document.getElementById('trimProgressFill').style.width = '5%';
+      document.getElementById('trimProgressText').textContent = '영상 준비 중...';
 
       try {
-        const video = document.getElementById('trimPreview');
-        const duration = video.duration;
+        // 기존 컨텍스트 정리
+        if (trimAudioContext) {
+          try { trimAudioContext.close(); } catch(e) {}
+        }
         
-        // 바이트 기반 추출 (근사치)
-        const fileBuffer = await trimFile.arrayBuffer();
-        const bytesPerSecond = fileBuffer.byteLength / duration;
+        // 새 비디오 요소 생성
+        if (trimProcessingVideo) {
+          trimProcessingVideo.remove();
+        }
+        trimProcessingVideo = document.createElement('video');
+        trimProcessingVideo.src = URL.createObjectURL(trimFile);
+        trimProcessingVideo.style.display = 'none';
+        document.body.appendChild(trimProcessingVideo);
         
-        const startByte = Math.floor(startTime * bytesPerSecond);
-        const endByte = Math.floor(endTime * bytesPerSecond);
+        // 메타데이터 로드 대기
+        await new Promise((resolve, reject) => {
+          trimProcessingVideo.onloadedmetadata = resolve;
+          trimProcessingVideo.onerror = () => reject(new Error('영상 로드 실패'));
+          setTimeout(() => reject(new Error('영상 로드 시간 초과')), 30000);
+        });
         
-        const trimmedBuffer = fileBuffer.slice(startByte, endByte);
+        const videoWidth = trimProcessingVideo.videoWidth || 1280;
+        const videoHeight = trimProcessingVideo.videoHeight || 720;
         
-        // 진행률 업데이트
-        document.getElementById('trimProgressFill').style.width = '100%';
-        document.getElementById('trimProgressText').textContent = '완료!';
+        document.getElementById('trimProgressFill').style.width = '10%';
+        document.getElementById('trimProgressText').textContent = '오디오 설정 중...';
+        
+        // Canvas 준비
+        const canvas = document.createElement('canvas');
+        canvas.width = videoWidth;
+        canvas.height = videoHeight;
+        const ctx = canvas.getContext('2d');
+        
+        // Web Audio API 설정
+        trimAudioContext = new (window.AudioContext || window.webkitAudioContext)();
+        const source = trimAudioContext.createMediaElementSource(trimProcessingVideo);
+        const destination = trimAudioContext.createMediaStreamDestination();
+        source.connect(destination);
+        
+        // 스트림 생성
+        const canvasStream = canvas.captureStream(30);
+        const combinedStream = new MediaStream([
+          ...canvasStream.getVideoTracks(),
+          ...destination.stream.getAudioTracks()
+        ]);
+        
+        // MediaRecorder 설정 (MP4 우선)
+        const recordedChunks = [];
+        let mimeType = 'video/webm';
+        let fileExt = 'webm';
+        
+        // MP4 지원 확인 (Chrome, Edge 등에서 지원)
+        if (MediaRecorder.isTypeSupported('video/mp4;codecs=avc1.42E01E,mp4a.40.2')) {
+          mimeType = 'video/mp4;codecs=avc1.42E01E,mp4a.40.2';
+          fileExt = 'mp4';
+        } else if (MediaRecorder.isTypeSupported('video/mp4')) {
+          mimeType = 'video/mp4';
+          fileExt = 'mp4';
+        } else if (MediaRecorder.isTypeSupported('video/webm;codecs=vp9,opus')) {
+          mimeType = 'video/webm;codecs=vp9,opus';
+          fileExt = 'webm';
+        } else if (MediaRecorder.isTypeSupported('video/webm;codecs=vp8,opus')) {
+          mimeType = 'video/webm;codecs=vp8,opus';
+          fileExt = 'webm';
+        }
+        
+        console.log('🎥 트림 녹화 형식:', mimeType);
+        
+        const mediaRecorder = new MediaRecorder(combinedStream, { 
+          mimeType: mimeType,
+          videoBitsPerSecond: 5000000
+        });
+        
+        mediaRecorder.ondataavailable = (e) => {
+          if (e.data.size > 0) recordedChunks.push(e.data);
+        };
+        
+        // 녹화 완료 Promise
+        const recordingComplete = new Promise((resolve) => {
+          mediaRecorder.onstop = () => {
+            const blob = new Blob(recordedChunks, { type: mimeType });
+            resolve({ blob, fileExt });
+          };
+        });
+        
+        // 시작 시점으로 이동
+        trimProcessingVideo.currentTime = startTime;
+        await new Promise(resolve => {
+          trimProcessingVideo.onseeked = resolve;
+        });
+        
+        document.getElementById('trimProgressFill').style.width = '15%';
+        document.getElementById('trimProgressText').textContent = '녹화 시작...';
+        
+        // 녹화 시작
+        mediaRecorder.start(100);
+        
+        // 프레임 그리기
+        let isRecording = true;
+        function drawFrame() {
+          if (!isRecording) return;
+          
+          ctx.drawImage(trimProcessingVideo, 0, 0, canvas.width, canvas.height);
+          
+          const elapsed = trimProcessingVideo.currentTime - startTime;
+          const progressPercent = Math.min((elapsed / clipDuration) * 100, 99);
+          document.getElementById('trimProgressFill').style.width = `${15 + progressPercent * 0.80}%`;
+          document.getElementById('trimProgressText').textContent = 
+            `추출 중... ${Math.round(progressPercent)}% (${formatTimeShort(elapsed)} / ${formatTimeShort(clipDuration)})`;
+          
+          // 종료 시점 확인
+          if (trimProcessingVideo.currentTime >= endTime || trimProcessingVideo.ended) {
+            isRecording = false;
+            trimProcessingVideo.pause();
+            setTimeout(() => mediaRecorder.stop(), 300);
+            return;
+          }
+          
+          requestAnimationFrame(drawFrame);
+        }
+        
+        // 종료 시점 감시
+        trimProcessingVideo.ontimeupdate = () => {
+          if (trimProcessingVideo.currentTime >= endTime) {
+            isRecording = false;
+            trimProcessingVideo.pause();
+            setTimeout(() => {
+              if (mediaRecorder.state === 'recording') {
+                mediaRecorder.stop();
+              }
+            }, 300);
+          }
+        };
+        
+        // 재생 시작
+        await trimProcessingVideo.play();
+        drawFrame();
+        
+        // 녹화 완료 대기
+        const result = await recordingComplete;
         
         // 다운로드
-        const ext = getFileExtension(trimFile.name);
-        const baseName = trimFile.name.replace(`.${ext}`, '');
-        
-        const blob = new Blob([new Uint8Array(trimmedBuffer)], { type: trimFile.type });
-        const url = URL.createObjectURL(blob);
+        const url = URL.createObjectURL(result.blob);
         const a = document.createElement('a');
         a.href = url;
-        a.download = `${baseName}_trimmed.${ext}`;
+        const baseName = trimFile.name.replace(/\.[^/.]+$/, '');
+        a.download = `${baseName}_trimmed_${formatTimeShort(startTime).replace(/:/g, '-')}_${formatTimeShort(endTime).replace(/:/g, '-')}.${result.fileExt}`;
         document.body.appendChild(a);
         a.click();
         document.body.removeChild(a);
         URL.revokeObjectURL(url);
         
-        alert(`✅ 영상 자르기가 완료되었습니다!\n\n추출 구간: ${formatTimeShort(startTime)} ~ ${formatTimeShort(endTime)}\n선택 길이: ${formatTimeShort(endTime - startTime)}\n\n참고: 단순 자르기 방식입니다.\n정확한 프레임 단위 자르기는 전문 편집 프로그램을 사용해주세요.`);
+        // 정리
+        trimProcessingVideo.remove();
+        trimProcessingVideo = null;
+        
+        document.getElementById('trimProgressFill').style.width = '100%';
+        document.getElementById('trimProgressText').textContent = '완료!';
+        
+        alert(`✅ 영상 추출 완료!\n\n📍 구간: ${formatTimeShort(startTime)} ~ ${formatTimeShort(endTime)}\n⏱ 길이: ${formatTimeShort(clipDuration)}\n📁 형식: ${result.fileExt.toUpperCase()}`);
         
       } catch (error) {
         console.error('영상 자르기 오류:', error);
-        alert('영상 자르기 중 오류가 발생했습니다.');
+        
+        if (trimProcessingVideo) {
+          trimProcessingVideo.remove();
+          trimProcessingVideo = null;
+        }
+        
+        alert(`❌ 영상 추출 실패\n\n오류: ${error.message}\n\n💡 대안:\n- 영상 파일이 손상되지 않았는지 확인\n- 브라우저를 새로고침 후 다시 시도\n- VLC 또는 다른 편집 프로그램 사용`);
       } finally {
         btn.disabled = false;
         btn.innerHTML = '✂️ 선택 구간 추출하기';
-        progress.classList.remove('show');
+        setTimeout(() => progress.classList.remove('show'), 2000);
       }
     }
 
@@ -5950,14 +6585,27 @@
           ...destination.stream.getAudioTracks()
         ]);
         
-        // MediaRecorder 설정
+        // MediaRecorder 설정 (MP4 우선)
         const recordedChunks = [];
-        let mimeType = 'video/webm;codecs=vp8,opus';
+        let mimeType = 'video/webm';
         let fileExt = 'webm';
         
-        if (MediaRecorder.isTypeSupported('video/webm;codecs=vp9,opus')) {
+        // MP4 지원 확인 (Chrome, Edge 등에서 지원)
+        if (MediaRecorder.isTypeSupported('video/mp4;codecs=avc1.42E01E,mp4a.40.2')) {
+          mimeType = 'video/mp4;codecs=avc1.42E01E,mp4a.40.2';
+          fileExt = 'mp4';
+        } else if (MediaRecorder.isTypeSupported('video/mp4')) {
+          mimeType = 'video/mp4';
+          fileExt = 'mp4';
+        } else if (MediaRecorder.isTypeSupported('video/webm;codecs=vp9,opus')) {
           mimeType = 'video/webm;codecs=vp9,opus';
+          fileExt = 'webm';
+        } else if (MediaRecorder.isTypeSupported('video/webm;codecs=vp8,opus')) {
+          mimeType = 'video/webm;codecs=vp8,opus';
+          fileExt = 'webm';
         }
+        
+        console.log('🔊 볼륨 녹화 형식:', mimeType);
         
         const mediaRecorder = new MediaRecorder(combinedStream, { 
           mimeType: mimeType,
@@ -6033,7 +6681,7 @@
         document.getElementById('volumeProgressFill').style.width = '100%';
         document.getElementById('volumeProgressText').textContent = '완료!';
         
-        alert(`✅ 볼륨 증폭 완료!\n\n🔊 볼륨: ${Math.round(volumeMultiplier * 100)}%\n📁 형식: WebM\n\n💡 AVI로 변환하려면:\nVLC > 미디어 > 변환/저장`);
+        alert(`✅ 볼륨 증폭 완료!\n\n🔊 볼륨: ${Math.round(volumeMultiplier * 100)}%\n📁 형식: ${fileExt.toUpperCase()}`);
         
       } catch (error) {
         console.error('볼륨 조절 오류:', error);
