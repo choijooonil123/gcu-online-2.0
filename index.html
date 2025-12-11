@@ -4155,6 +4155,12 @@
           // Web Audio API로 오디오 처리
           recordingAudioContext = new (window.AudioContext || window.webkitAudioContext)();
           
+          // AudioContext가 suspended 상태면 resume
+          if (recordingAudioContext.state === 'suspended') {
+            await recordingAudioContext.resume();
+          }
+          console.log('🎚️ AudioContext 상태:', recordingAudioContext.state);
+          
           // 마이크 소스
           const micSource = recordingAudioContext.createMediaStreamSource(micStream);
           
@@ -4205,12 +4211,19 @@
           ]);
           
           // 오디오 레벨 미터 시작
+          console.log('🎚️ recordingAnalyser 생성됨:', recordingAnalyser);
           startAudioMeter();
           
           console.log('🎚️ 자동 감도 조절 활성화됨');
         } else if (micStream) {
           // 자동 감도 비활성화 - Web Audio API로 믹싱 (컴프레서 없이)
           recordingAudioContext = new (window.AudioContext || window.webkitAudioContext)();
+          
+          // AudioContext가 suspended 상태면 resume
+          if (recordingAudioContext.state === 'suspended') {
+            await recordingAudioContext.resume();
+          }
+          console.log('🎚️ AudioContext 상태 (no compressor):', recordingAudioContext.state);
           
           // 마이크 소스
           const micSource = recordingAudioContext.createMediaStreamSource(micStream);
@@ -4348,12 +4361,18 @@
     
     // 오디오 레벨 미터 시작
     function startAudioMeter() {
+      console.log('🎚️ startAudioMeter 호출됨');
+      
       const meterContainer = document.getElementById('audioMeterContainer');
       const meterBar = document.getElementById('audioMeterBar');
       const meterLabel = document.getElementById('audioMeterLabel');
       
-      if (!recordingAnalyser) return;
+      if (!recordingAnalyser) {
+        console.log('🎚️ recordingAnalyser가 없음');
+        return;
+      }
       
+      console.log('🎚️ 레벨미터 표시');
       meterContainer.style.display = 'flex';
       
       const dataArray = new Uint8Array(recordingAnalyser.frequencyBinCount);
