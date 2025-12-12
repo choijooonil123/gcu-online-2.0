@@ -6107,13 +6107,22 @@
         
         let blob, totalDuration, fileExt;
         
+        let usedFastMode = false; // 실제로 빠른 모드가 성공했는지 추적
+        
         if (fastCheck.canFast) {
           // ⚡ 빠른 결합 (같은 코덱 MP4)
-          progressCallback(10, '⚡ 빠른 결합 모드...');
+          progressCallback(10, '⚡ 빠른 결합 모드 시도...');
           
           try {
             blob = await fastMergeMP4(mergeFiles, progressCallback);
+            
+            // Blob 유효성 검사
+            if (!blob || blob.size < 1000) {
+              throw new Error('출력 파일이 너무 작습니다');
+            }
+            
             fileExt = 'mp4';
+            usedFastMode = true;
             
             // 총 길이 계산
             totalDuration = 0;
@@ -6125,10 +6134,11 @@
               URL.revokeObjectURL(video.src);
             }
             
-            console.log('⚡ 빠른 결합 성공!');
+            console.log('⚡ 빠른 결합 성공! 크기:', (blob.size / 1024 / 1024).toFixed(2), 'MB');
           } catch (fastError) {
             console.warn('⚡ 빠른 결합 실패, 일반 모드로 전환:', fastError);
             progressCallback(10, '🐢 일반 결합 모드로 전환...');
+            usedFastMode = false;
             const result = await slowMergeVideos(progressCallback);
             blob = result.blob;
             totalDuration = result.totalDuration;
@@ -6158,7 +6168,7 @@
         
         progressCallback(100, '완료!');
         
-        const modeText = fastCheck.canFast ? '⚡ 빠른 결합' : '🐢 일반 결합';
+        const modeText = usedFastMode ? '⚡ 빠른 결합 (무손실)' : '🐢 일반 결합 (재인코딩)';
         alert(`✅ 영상 결합 완료!\n\n📁 형식: ${fileExt.toUpperCase()}\n⏱ 총 길이: ${formatTimeShort(totalDuration)}\n🎬 결합된 영상: ${mergeFiles.length}개\n🚀 모드: ${modeText}`);
         
       } catch (error) {
