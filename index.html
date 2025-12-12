@@ -2410,38 +2410,41 @@
         <button class="modal-close" onclick="closePublishModal()">&times;</button>
       </div>
       <div class="modal-body" style="padding: 0;">
-        <!-- 안내 메시지 -->
-        <div style="padding: 16px; background: #1e293b; border-bottom: 1px solid #334155;">
+        <!-- 현재 교수/강의 정보 -->
+        <div style="padding: 16px; background: linear-gradient(135deg, #1e40af, #3b82f6); border-bottom: 1px solid #334155;">
           <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 12px;">
-            <span style="font-size: 24px;">📁</span>
-            <div>
-              <div style="font-weight: 600; color: #e5e7eb;">게시 폴더 선택</div>
-              <div style="font-size: 12px; color: #9ca3af;">C:\gcu-online\교수이름\강의명\게시 폴더를 선택하세요</div>
+            <span style="font-size: 32px;">👨‍🏫</span>
+            <div style="flex: 1;">
+              <div style="font-weight: 700; color: #ffffff; font-size: 18px;" id="publishProfessorName">교수 이름</div>
+              <div style="font-size: 14px; color: #bfdbfe;" id="publishCourseName">강의명</div>
+            </div>
+            <button onclick="refreshPublishStatus()" style="padding: 8px 16px; background: rgba(255,255,255,0.2); border: none; border-radius: 6px; color: white; cursor: pointer; font-size: 13px;" title="새로고침">
+              🔄 새로고침
+            </button>
+          </div>
+          <div style="background: rgba(0,0,0,0.2); border-radius: 8px; padding: 10px;">
+            <div style="font-size: 12px; color: #93c5fd; margin-bottom: 4px;">📁 게시 폴더 경로</div>
+            <div style="font-size: 13px; color: #ffffff; font-family: monospace;" id="publishFolderFullPath">C:\gcu-online\교수이름\강의명\게시</div>
+            <div style="font-size: 11px; color: #93c5fd; margin-top: 8px;">
+              💡 이 폴더에 영상을 넣으면 Python 스크립트가 자동으로 유튜브에 업로드합니다.
             </div>
           </div>
-          <button onclick="selectPublishFolder()" style="width: 100%; padding: 12px; background: linear-gradient(135deg, #3b82f6, #2563eb); border: none; border-radius: 8px; color: white; font-size: 14px; cursor: pointer; font-weight: 600;">
-            📂 게시 폴더 선택
-          </button>
-          <div id="publishFolderPath" style="margin-top: 8px; font-size: 12px; color: #6b7280; text-align: center;"></div>
         </div>
         
-        <!-- 파일 목록 -->
+        <!-- 업로드 상태 목록 -->
         <div id="publishFilesList" style="padding: 16px; max-height: 50vh; overflow-y: auto;">
           <div style="text-align: center; color: #9ca3af; padding: 40px;">
-            <div style="font-size: 48px; margin-bottom: 16px;">📂</div>
-            <div>게시 폴더를 선택하면 파일 목록이 표시됩니다.</div>
-            <div style="margin-top: 8px; font-size: 12px; color: #6b7280;">
-              폴더에 영상 파일을 넣으면 자동으로 유튜브에 업로드됩니다.
-            </div>
+            <div style="font-size: 48px; margin-bottom: 16px;">⏳</div>
+            <div>업로드 상태를 불러오는 중...</div>
           </div>
         </div>
         
-        <!-- 상태 표시 -->
+        <!-- 상태 범례 -->
         <div style="padding: 12px 16px; background: #0f172a; border-top: 1px solid #334155; font-size: 12px; color: #9ca3af;">
-          <div style="display: flex; align-items: center; gap: 16px;">
+          <div style="display: flex; align-items: center; gap: 16px; flex-wrap: wrap;">
             <span>🟢 업로드 완료</span>
-            <span>🟡 업로드 대기중</span>
-            <span>⚪ 미업로드</span>
+            <span>🔵 업로드 중</span>
+            <span>🔴 오류</span>
           </div>
         </div>
       </div>
@@ -2490,6 +2493,36 @@
       <div class="modal-footer">
         <button class="ctrl-btn" onclick="loadVideoViewsData()">🔄 새로고침</button>
         <button class="ctrl-btn" onclick="closeVideoViewsModal()">닫기</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========== YouTube 플레이어 모달 (학생용 - 실제 시청 추적) ========== -->
+  <div class="modal-overlay" id="youtubePlayerModal" style="z-index: 10001;">
+    <div class="modal" style="max-width: 900px; background: #000;">
+      <div class="modal-header" style="background: #111; border-bottom: 1px solid #333;">
+        <h2 id="youtubePlayerTitle" style="color: #fff;">🎬 강의 시청</h2>
+        <button class="modal-close" onclick="closeYoutubePlayer()" style="color: #fff;">&times;</button>
+      </div>
+      <div class="modal-body" style="padding: 0; background: #000;">
+        <!-- YouTube 플레이어 -->
+        <div id="youtubePlayerContainer" style="position: relative; width: 100%; padding-bottom: 56.25%;">
+          <div id="youtubePlayer" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%;"></div>
+        </div>
+        
+        <!-- 시청 진행률 -->
+        <div style="padding: 12px 16px; background: #1a1a1a;">
+          <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;">
+            <span style="color: #9ca3af; font-size: 13px;">📊 시청 진행률</span>
+            <span id="watchProgress" style="color: #10b981; font-size: 14px; font-weight: 600;">0%</span>
+          </div>
+          <div style="background: #333; border-radius: 4px; height: 8px; overflow: hidden;">
+            <div id="watchProgressBar" style="background: linear-gradient(90deg, #10b981, #34d399); height: 100%; width: 0%; transition: width 0.5s;"></div>
+          </div>
+          <div style="margin-top: 8px; font-size: 11px; color: #6b7280;">
+            💡 80% 이상 시청하면 "시청 완료"로 기록됩니다.
+          </div>
+        </div>
       </div>
     </div>
   </div>
@@ -3450,40 +3483,66 @@
     }
 
     // ========== 강의 게시 모달 (교수용) ==========
-    let publishFolderHandle = null;
     let uploadedVideos = {};  // Firebase에서 가져온 이미 업로드된 영상 목록
     
+    let publishStatusListener = null;  // Firebase 실시간 리스너
+
     function openPublishModal() {
+      // 교수만 사용 가능
+      if (currentUser.role !== 'professor') {
+        alert('교수만 강의 게시 기능을 사용할 수 있습니다.');
+        return;
+      }
+      
+      // 현재 교수/강의 정보 표시
+      document.getElementById('publishProfessorName').textContent = currentUser.name + ' 교수';
+      document.getElementById('publishCourseName').textContent = currentUser.course;
+      document.getElementById('publishFolderFullPath').textContent = `C:\\gcu-online\\${currentUser.name}\\${currentUser.course}\\게시`;
+      
       document.getElementById('publishModal').classList.add('show');
-      loadUploadedVideos();
+      
+      // 업로드 상태 로드 및 실시간 감시 시작
+      startPublishStatusListener();
     }
     
     function closePublishModal() {
       document.getElementById('publishModal').classList.remove('show');
-    }
-    
-    async function selectPublishFolder() {
-      try {
-        // 폴더 선택 다이얼로그
-        publishFolderHandle = await window.showDirectoryPicker({
-          mode: 'readwrite'
-        });
-        
-        document.getElementById('publishFolderPath').textContent = `📁 ${publishFolderHandle.name}`;
-        
-        // 파일 목록 로드
-        await loadPublishFiles();
-        
-      } catch (err) {
-        if (err.name !== 'AbortError') {
-          console.error('폴더 선택 오류:', err);
-          alert('폴더를 선택할 수 없습니다.');
-        }
+      // 실시간 리스너 해제
+      if (publishStatusListener) {
+        publishStatusListener();
+        publishStatusListener = null;
       }
     }
     
-    async function loadUploadedVideos() {
-      // Firebase에서 현재 교수의 업로드된 영상 목록 가져오기
+    function refreshPublishStatus() {
+      loadPublishStatus();
+    }
+    
+    function startPublishStatusListener() {
+      if (!firebaseEnabled || !db) {
+        showPublishError('Firebase에 연결되지 않았습니다.');
+        return;
+      }
+      
+      const professor = currentUser.name;
+      const course = currentUser.course;
+      
+      // 기존 리스너 해제
+      if (publishStatusListener) {
+        publishStatusListener();
+      }
+      
+      // 업로드 상태 실시간 감시
+      const statusRef = db.ref(`uploadStatus/${professor}/${course}`);
+      publishStatusListener = statusRef.on('value', (snapshot) => {
+        renderPublishStatus(snapshot.val());
+      });
+      
+      // 완료된 영상 목록도 함께 로드
+      loadCompletedVideos();
+    }
+    
+    async function loadCompletedVideos() {
       if (!firebaseEnabled || !db) return;
       
       try {
@@ -3491,137 +3550,148 @@
         const course = currentUser.course;
         
         const snapshot = await db.ref(`lectures/${professor}/${course}`).once('value');
-        const data = snapshot.val();
-        
-        uploadedVideos = {};
-        if (data) {
-          Object.values(data).forEach(video => {
-            // 파일명으로 키 생성
-            const fileName = video.fileName || video.title;
-            if (fileName) {
-              uploadedVideos[fileName.toLowerCase()] = video;
-            }
-          });
-        }
-        
-        console.log('📋 업로드된 영상:', Object.keys(uploadedVideos).length, '개');
+        uploadedVideos = snapshot.val() || {};
         
       } catch (err) {
-        console.error('업로드된 영상 목록 로드 오류:', err);
+        console.error('완료된 영상 목록 로드 오류:', err);
       }
     }
     
-    async function loadPublishFiles() {
+    async function loadPublishStatus() {
+      if (!firebaseEnabled || !db) {
+        showPublishError('Firebase에 연결되지 않았습니다.');
+        return;
+      }
+      
+      const listContainer = document.getElementById('publishFilesList');
+      listContainer.innerHTML = '<div style="text-align: center; padding: 20px; color: #9ca3af;">⏳ 로딩 중...</div>';
+      
+      try {
+        const professor = currentUser.name;
+        const course = currentUser.course;
+        
+        // 업로드 상태와 완료된 영상 모두 가져오기
+        const [statusSnapshot, lecturesSnapshot] = await Promise.all([
+          db.ref(`uploadStatus/${professor}/${course}`).once('value'),
+          db.ref(`lectures/${professor}/${course}`).once('value')
+        ]);
+        
+        uploadedVideos = lecturesSnapshot.val() || {};
+        renderPublishStatus(statusSnapshot.val());
+        
+      } catch (err) {
+        console.error('업로드 상태 로드 오류:', err);
+        showPublishError('업로드 상태를 불러오는 중 오류가 발생했습니다.');
+      }
+    }
+    
+    function renderPublishStatus(statusData) {
       const listContainer = document.getElementById('publishFilesList');
       
-      if (!publishFolderHandle) {
+      // 업로드 중인 항목과 완료된 항목 합치기
+      const allItems = [];
+      
+      // 업로드 중/대기 중인 항목
+      if (statusData) {
+        Object.entries(statusData).forEach(([key, item]) => {
+          if (item.status !== 'completed') {
+            allItems.push({ ...item, key, type: 'status' });
+          }
+        });
+      }
+      
+      // 완료된 영상 (lectures에서)
+      if (uploadedVideos) {
+        Object.entries(uploadedVideos).forEach(([key, item]) => {
+          allItems.push({ ...item, key, type: 'completed' });
+        });
+      }
+      
+      if (allItems.length === 0) {
         listContainer.innerHTML = `
           <div style="text-align: center; color: #9ca3af; padding: 40px;">
-            <div style="font-size: 48px; margin-bottom: 16px;">📂</div>
-            <div>게시 폴더를 선택하면 파일 목록이 표시됩니다.</div>
+            <div style="font-size: 48px; margin-bottom: 16px;">📭</div>
+            <div>아직 게시된 강의 영상이 없습니다.</div>
+            <div style="margin-top: 12px; font-size: 12px; color: #6b7280; line-height: 1.6;">
+              1. Python 스크립트 실행 (감시 서비스 시작)<br>
+              2. 게시 폴더에 영상 파일 넣기<br>
+              3. 자동으로 유튜브에 업로드됨
+            </div>
           </div>
         `;
         return;
       }
       
-      listContainer.innerHTML = '<div style="text-align: center; padding: 20px; color: #9ca3af;">⏳ 파일 목록 로딩 중...</div>';
+      // 정렬: 업로드 중 > 완료 (최신순)
+      allItems.sort((a, b) => {
+        if (a.status === 'uploading' && b.status !== 'uploading') return -1;
+        if (a.status !== 'uploading' && b.status === 'uploading') return 1;
+        return (b.timestamp || 0) - (a.timestamp || 0);
+      });
       
-      try {
-        const files = [];
-        const videoExtensions = ['.mp4', '.webm', '.avi', '.mov', '.mkv'];
+      let html = '';
+      
+      allItems.forEach(item => {
+        const fileName = item.fileName || item.title || '영상';
+        const uploadDate = item.uploadedAt || item.completedAt || item.startedAt;
+        const dateStr = uploadDate ? new Date(uploadDate).toLocaleDateString('ko-KR') : '';
         
-        // 폴더 내 파일 목록 가져오기
-        for await (const entry of publishFolderHandle.values()) {
-          if (entry.kind === 'file') {
-            const ext = entry.name.substring(entry.name.lastIndexOf('.')).toLowerCase();
-            if (videoExtensions.includes(ext)) {
-              const file = await entry.getFile();
-              files.push({
-                name: entry.name,
-                size: file.size,
-                lastModified: file.lastModified,
-                handle: entry
-              });
-            }
-          }
-        }
+        let statusHtml = '';
+        let progressHtml = '';
         
-        if (files.length === 0) {
-          listContainer.innerHTML = `
-            <div style="text-align: center; color: #9ca3af; padding: 40px;">
-              <div style="font-size: 48px; margin-bottom: 16px;">📭</div>
-              <div>폴더에 영상 파일이 없습니다.</div>
-              <div style="margin-top: 8px; font-size: 12px; color: #6b7280;">
-                .mp4, .webm, .avi, .mov, .mkv 파일을 넣어주세요.
-              </div>
+        if (item.status === 'uploading') {
+          const progress = item.progress || 0;
+          statusHtml = `<span style="color: #3b82f6;">🔵 업로드 중 (${progress}%)</span>`;
+          progressHtml = `
+            <div style="margin-top: 8px; background: #1e293b; border-radius: 4px; height: 6px; overflow: hidden;">
+              <div style="background: linear-gradient(90deg, #3b82f6, #60a5fa); height: 100%; width: ${progress}%; transition: width 0.3s;"></div>
             </div>
           `;
-          return;
+        } else if (item.status === 'error') {
+          statusHtml = `<span style="color: #ef4444;">🔴 오류</span>`;
+        } else if (item.type === 'completed' || item.status === 'completed') {
+          statusHtml = `<span style="color: #10b981;">🟢 업로드 완료</span>`;
+        } else {
+          statusHtml = `<span style="color: #9ca3af;">⚪ 대기 중</span>`;
         }
         
-        // 파일 정렬 (최신순)
-        files.sort((a, b) => b.lastModified - a.lastModified);
+        const videoUrl = item.url || '';
+        const linkHtml = videoUrl ? `<a href="${videoUrl}" target="_blank" style="color: #60a5fa; font-size: 12px; margin-left: 8px;">YouTube에서 보기 →</a>` : '';
         
-        // 파일 목록 HTML 생성
-        let html = '';
-        
-        for (const file of files) {
-          const isUploaded = uploadedVideos[file.name.toLowerCase()];
-          const uploadInfo = isUploaded ? uploadedVideos[file.name.toLowerCase()] : null;
-          const fileSize = formatFileSize(file.size);
-          const fileDate = new Date(file.lastModified).toLocaleDateString('ko-KR');
-          
-          let statusIcon, statusText, statusColor;
-          if (isUploaded) {
-            statusIcon = '🟢';
-            statusText = '업로드 완료';
-            statusColor = '#10b981';
-          } else {
-            statusIcon = '⚪';
-            statusText = '미업로드';
-            statusColor = '#9ca3af';
-          }
-          
-          html += `
-            <div style="display: flex; align-items: center; gap: 12px; padding: 12px; background: #1e293b; border-radius: 8px; margin-bottom: 8px;">
+        html += `
+          <div style="background: #1e293b; border-radius: 8px; padding: 14px; margin-bottom: 8px;">
+            <div style="display: flex; align-items: center; gap: 12px;">
               <span style="font-size: 24px;">🎬</span>
               <div style="flex: 1; min-width: 0;">
                 <div style="font-weight: 500; color: #e5e7eb; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
-                  ${file.name}
+                  ${fileName}
                 </div>
-                <div style="font-size: 12px; color: #9ca3af;">
-                  ${fileSize} • ${fileDate}
-                  ${uploadInfo ? ` • <a href="${uploadInfo.url}" target="_blank" style="color: #60a5fa;">YouTube에서 보기</a>` : ''}
+                <div style="font-size: 12px; color: #9ca3af; margin-top: 2px;">
+                  ${dateStr}
                 </div>
               </div>
-              <div style="display: flex; align-items: center; gap: 8px;">
-                <span style="color: ${statusColor}; font-size: 12px;">${statusIcon} ${statusText}</span>
+              <div style="text-align: right;">
+                ${statusHtml}
+                ${linkHtml}
               </div>
             </div>
-          `;
-        }
-        
-        listContainer.innerHTML = html;
-        
-      } catch (err) {
-        console.error('파일 목록 로드 오류:', err);
-        listContainer.innerHTML = `
-          <div style="text-align: center; color: #ef4444; padding: 40px;">
-            <div style="font-size: 48px; margin-bottom: 16px;">⚠️</div>
-            <div>파일 목록을 불러오는 중 오류가 발생했습니다.</div>
+            ${progressHtml}
           </div>
         `;
-      }
+      });
+      
+      listContainer.innerHTML = html;
     }
     
-    function formatFileSize(bytes) {
-      if (bytes === 0) return '0 Bytes';
-      const k = 1024;
-      const sizes = ['Bytes', 'KB', 'MB', 'GB'];
-      const i = Math.floor(Math.log(bytes) / Math.log(k));
-      return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+    function showPublishError(message) {
+      document.getElementById('publishFilesList').innerHTML = `
+        <div style="text-align: center; color: #ef4444; padding: 40px;">
+          <div style="font-size: 48px; margin-bottom: 16px;">⚠️</div>
+          <div>${message}</div>
+        </div>
+      `;
     }
-
+    
     // ========== 강의 시청 모달 (학생용) ==========
     let lectureVideosData = {};  // Firebase에서 가져온 강의 시청 데이터
     
@@ -3667,7 +3737,201 @@
       document.getElementById('lectureVideosModal').classList.remove('show');
     }
     
-    // 영상 시청 기록 저장
+    // ========== YouTube 플레이어 및 실제 시청 추적 ==========
+    let ytPlayer = null;
+    let ytPlayerReady = false;
+    let currentVideoInfo = null;
+    let watchedSeconds = 0;
+    let totalDuration = 0;
+    let watchInterval = null;
+    let hasRecordedView = false;
+    const WATCH_THRESHOLD = 0.8;  // 80% 시청 시 완료로 기록
+    
+    // YouTube IFrame API 로드
+    function loadYouTubeAPI() {
+      if (window.YT && window.YT.Player) {
+        ytPlayerReady = true;
+        return;
+      }
+      
+      const tag = document.createElement('script');
+      tag.src = 'https://www.youtube.com/iframe_api';
+      const firstScriptTag = document.getElementsByTagName('script')[0];
+      firstScriptTag.parentNode.insertBefore(tag, firstScriptTag);
+    }
+    
+    // YouTube API 준비 완료 콜백
+    window.onYouTubeIframeAPIReady = function() {
+      ytPlayerReady = true;
+      console.log('✅ YouTube IFrame API 준비됨');
+    };
+    
+    // 영상 재생 (새 탭 대신 모달에서)
+    function playVideo(videoUrl, videoTitle, professor, course, videoKey) {
+      // YouTube 비디오 ID 추출
+      const videoId = extractYouTubeId(videoUrl);
+      if (!videoId) {
+        // YouTube 링크가 아니면 새 탭에서 열기
+        window.open(videoUrl, '_blank');
+        return;
+      }
+      
+      // 현재 영상 정보 저장
+      currentVideoInfo = { professor, course, videoKey, videoTitle, videoId };
+      watchedSeconds = 0;
+      totalDuration = 0;
+      hasRecordedView = false;
+      
+      // UI 업데이트
+      document.getElementById('youtubePlayerTitle').textContent = `🎬 ${videoTitle}`;
+      document.getElementById('watchProgress').textContent = '0%';
+      document.getElementById('watchProgressBar').style.width = '0%';
+      
+      // 모달 열기
+      document.getElementById('youtubePlayerModal').classList.add('show');
+      
+      // 플레이어 생성 또는 영상 변경
+      if (ytPlayer && ytPlayer.loadVideoById) {
+        ytPlayer.loadVideoById(videoId);
+      } else {
+        createYouTubePlayer(videoId);
+      }
+    }
+    
+    function extractYouTubeId(url) {
+      if (!url) return null;
+      const match = url.match(/(?:youtu\.be\/|youtube\.com\/(?:embed\/|v\/|watch\?v=|watch\?.+&v=))([^&?\s]{11})/);
+      return match ? match[1] : null;
+    }
+    
+    function createYouTubePlayer(videoId) {
+      if (!ytPlayerReady) {
+        loadYouTubeAPI();
+        setTimeout(() => createYouTubePlayer(videoId), 500);
+        return;
+      }
+      
+      // 기존 플레이어 제거
+      if (ytPlayer) {
+        ytPlayer.destroy();
+      }
+      
+      ytPlayer = new YT.Player('youtubePlayer', {
+        videoId: videoId,
+        playerVars: {
+          autoplay: 1,
+          rel: 0,
+          modestbranding: 1
+        },
+        events: {
+          onReady: onPlayerReady,
+          onStateChange: onPlayerStateChange
+        }
+      });
+    }
+    
+    function onPlayerReady(event) {
+      totalDuration = event.target.getDuration();
+      event.target.playVideo();
+      startWatchTracking();
+    }
+    
+    function onPlayerStateChange(event) {
+      if (event.data === YT.PlayerState.PLAYING) {
+        startWatchTracking();
+      } else if (event.data === YT.PlayerState.PAUSED || event.data === YT.PlayerState.ENDED) {
+        stopWatchTracking();
+        
+        if (event.data === YT.PlayerState.ENDED) {
+          checkAndRecordView();
+        }
+      }
+    }
+    
+    function startWatchTracking() {
+      stopWatchTracking();
+      
+      watchInterval = setInterval(() => {
+        if (ytPlayer && ytPlayer.getCurrentTime) {
+          const currentTime = ytPlayer.getCurrentTime();
+          watchedSeconds = Math.max(watchedSeconds, currentTime);
+          
+          if (totalDuration > 0) {
+            const progress = Math.min((watchedSeconds / totalDuration) * 100, 100);
+            document.getElementById('watchProgress').textContent = Math.round(progress) + '%';
+            document.getElementById('watchProgressBar').style.width = progress + '%';
+            
+            // 80% 도달 시 시청 완료 기록
+            if (progress >= WATCH_THRESHOLD * 100 && !hasRecordedView) {
+              recordVideoViewComplete();
+            }
+          }
+        }
+      }, 1000);
+    }
+    
+    function stopWatchTracking() {
+      if (watchInterval) {
+        clearInterval(watchInterval);
+        watchInterval = null;
+      }
+    }
+    
+    function checkAndRecordView() {
+      if (totalDuration > 0 && watchedSeconds / totalDuration >= WATCH_THRESHOLD && !hasRecordedView) {
+        recordVideoViewComplete();
+      }
+    }
+    
+    function recordVideoViewComplete() {
+      if (!currentVideoInfo || hasRecordedView) return;
+      if (currentUser.role !== 'student' || !firebaseEnabled) return;
+      
+      hasRecordedView = true;
+      
+      const { professor, course, videoKey, videoTitle } = currentVideoInfo;
+      const studentName = currentUser.name;
+      const watchPercent = totalDuration > 0 ? Math.round((watchedSeconds / totalDuration) * 100) : 0;
+      
+      const viewData = {
+        studentName: studentName,
+        videoKey: videoKey,
+        videoTitle: videoTitle,
+        viewedAt: new Date().toISOString(),
+        timestamp: Date.now(),
+        watchedSeconds: Math.round(watchedSeconds),
+        totalDuration: Math.round(totalDuration),
+        watchPercent: watchPercent,
+        completed: true
+      };
+      
+      // Firebase에 시청 기록 저장
+      const safeProfessor = professor.replace(/\./g, '_');
+      const safeCourse = course.replace(/\./g, '_');
+      const safeStudent = studentName.replace(/\./g, '_');
+      
+      db.ref(`videoViews/${safeProfessor}/${safeCourse}/${videoKey}/${safeStudent}`).set(viewData)
+        .then(() => {
+          console.log(`✅ 시청 완료 기록: ${studentName} - ${videoTitle} (${watchPercent}%)`);
+          // 진행률 바 색상 변경 (완료)
+          document.getElementById('watchProgressBar').style.background = 'linear-gradient(90deg, #10b981, #34d399)';
+        })
+        .catch(err => {
+          console.error('시청 기록 저장 오류:', err);
+        });
+    }
+    
+    function closeYoutubePlayer() {
+      stopWatchTracking();
+      
+      if (ytPlayer && ytPlayer.stopVideo) {
+        ytPlayer.stopVideo();
+      }
+      
+      document.getElementById('youtubePlayerModal').classList.remove('show');
+    }
+    
+    // 기존 함수 유지 (클릭만으로 기록 - 교수용)
     function recordVideoView(professor, course, videoKey, videoTitle) {
       // 학생만 시청 기록 저장
       if (currentUser.role !== 'student' || !firebaseEnabled) {
@@ -3697,6 +3961,9 @@
           console.error('시청 기록 저장 오류:', err);
         });
     }
+    
+    // YouTube API 미리 로드
+    loadYouTubeAPI();
     
     // 시청 현황 모달 열기 (교수용)
     function openVideoViewsModal() {
@@ -3903,9 +4170,15 @@
             const uploadDate = video.uploadedAt ? new Date(video.uploadedAt).toLocaleDateString('ko-KR') : '';
             const videoTitle = video.title || video.fileName || '게시 영상';
             const videoKey = `${video.week || 1}_${video.session || 1}`;
+            const escapedTitle = videoTitle.replace(/'/g, "\\'").replace(/"/g, '\\"');
+            
+            // 학생은 모달에서 재생 (시청 추적), 교수는 새 탭에서 열기
+            const clickAction = currentUser.role === 'student' 
+              ? `playVideo('${video.url}', '${escapedTitle}', '${professor}', '${course}', '${videoKey}')`
+              : `window.open('${video.url}', '_blank')`;
             
             html += `
-              <a href="${video.url}" target="_blank" onclick="recordVideoView('${professor}', '${course}', '${videoKey}', '${videoTitle.replace(/'/g, "\\'")}')" style="display: flex; align-items: center; gap: 16px; padding: 14px 16px; background: #1e293b; border-radius: 12px; text-decoration: none; color: inherit; transition: all 0.2s; border: 1px solid #334155;" onmouseover="this.style.background='#334155'; this.style.borderColor='#3b82f6';" onmouseout="this.style.background='#1e293b'; this.style.borderColor='#334155';">
+              <div onclick="${clickAction}" style="display: flex; align-items: center; gap: 16px; padding: 14px 16px; background: #1e293b; border-radius: 12px; cursor: pointer; transition: all 0.2s; border: 1px solid #334155;" onmouseover="this.style.background='#334155'; this.style.borderColor='#3b82f6';" onmouseout="this.style.background='#1e293b'; this.style.borderColor='#334155';">
                 <div style="width: 60px; height: 45px; background: linear-gradient(135deg, #ef4444, #dc2626); border-radius: 8px; display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
                   <span style="font-size: 24px;">▶️</span>
                 </div>
@@ -3916,10 +4189,11 @@
                   <div style="font-size: 12px; color: #9ca3af;">
                     ${uploadDate ? '📅 ' + uploadDate : ''} 
                     ${video.url ? '🔗 YouTube' : ''}
+                    ${currentUser.role === 'student' ? ' • 📊 시청 추적' : ''}
                   </div>
                 </div>
-                <div style="color: #3b82f6; font-size: 20px;">→</div>
-              </a>
+                <div style="color: #3b82f6; font-size: 20px;">▶</div>
+              </div>
             `;
           });
           
