@@ -2783,6 +2783,7 @@
     let mediaRecorder = null;
     let recordedChunks = [];
     let recordingStream = null;
+    let isRecording = false;  // 녹화 상태 플래그
     let systemAudioTrack = null;  // 시스템 오디오 트랙 (토글용)
     let systemAudioEnabled = true;  // 시스템 오디오 활성화 상태
     let savedDirectoryHandle = null;  // 저장 폴더 핸들 (File System Access API)
@@ -5000,6 +5001,9 @@
 
         mediaRecorder.start(1000); // 1초마다 데이터 수집
         
+        // 상태 업데이트
+        isRecording = true;
+        
         // UI 업데이트
         document.getElementById('recordingIndicator').style.display = 'inline-flex';
         updateRecordToggleButton();
@@ -5018,6 +5022,9 @@
         mediaRecorder.stop();
         console.log('🎥 수업 녹화 종료');
       }
+      
+      // 상태 업데이트
+      isRecording = false;
       
       // 스트림 정리
       if (recordingStream) {
