@@ -500,7 +500,35 @@
       cursor: not-allowed;
     }
 
-    /* 녹화시작 체크박스 스타일 */
+    /* 녹화 토글 버튼 스타일 */
+    #btnRecordToggle {
+      transition: all 0.3s ease;
+    }
+    
+    #btnRecordToggle.recording-active {
+      animation: recording-pulse 1.5s infinite;
+    }
+    
+    @keyframes recording-pulse {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.8; transform: scale(1.02); }
+    }
+
+    /* 수업 토글 버튼 스타일 */
+    #btnClassToggle {
+      transition: all 0.3s ease;
+    }
+    
+    #btnClassToggle.class-active {
+      animation: class-pulse 2s infinite;
+    }
+    
+    @keyframes class-pulse {
+      0%, 100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.4); }
+      50% { box-shadow: 0 0 0 8px rgba(239, 68, 68, 0); }
+    }
+
+    /* 자동감도 체크박스 스타일 */
     .record-checkbox-label {
       display: flex;
       align-items: center;
@@ -2041,10 +2069,7 @@
       <div class="user-info">
         <!-- 교수 전용 버튼 (배지 왼쪽) -->
         <div class="professor-header-btns" id="professorHeaderBtns">
-          <label class="record-checkbox-label" title="체크하면 수업 시작 시 자동으로 화면을 녹화합니다">
-            <input type="checkbox" id="chkRecordClass" checked>
-            <span class="record-checkbox-text">🎥 녹화시작</span>
-          </label>
+          <button class="header-btn" id="btnRecordToggle" onclick="toggleRecording()" style="background: linear-gradient(135deg, #10b981, #059669);">🎥 녹화시작</button>
           <label class="record-checkbox-label" title="마이크 소리가 작으면 키우고, 크면 줄여서 일정하게 유지합니다">
             <input type="checkbox" id="chkAutoGain" checked>
             <span class="record-checkbox-text">🎚️ 자동감도</span>
@@ -2055,10 +2080,8 @@
           </div>
           <button class="header-btn" id="btnSystemAudioToggle" onclick="toggleSystemAudio()" style="display:none;" title="시스템 오디오 켜기/끄기">🔊 시스템</button>
           <span class="header-btn" id="saveFolderIndicator" onclick="selectSaveDirectory()" style="cursor:pointer; color:#fbbf24;" title="클릭하여 저장 폴더 선택">📁 폴더 미선택</span>
-          <button class="header-btn danger" id="btnStopRecording" onclick="stopRecordingManual()" disabled>⏹️ 녹화종료</button>
-          <button class="header-btn primary" id="btnStartClass" onclick="startClass()">▶️ 수업시작</button>
-          <button class="header-btn danger" id="btnEndClass" onclick="endClass()" disabled>⏹️ 수업종료</button>
-          <button class="header-btn" onclick="openLectureVideosModal()" style="background: linear-gradient(135deg, #ef4444, #dc2626);">🎬 강의게시</button>
+          <button class="header-btn primary" id="btnClassToggle" onclick="toggleClass()" style="background: linear-gradient(135deg, #3b82f6, #2563eb);">▶️ 수업시작</button>
+          <button class="header-btn" onclick="openPublishModal()" style="background: linear-gradient(135deg, #ef4444, #dc2626);">🎬 강의게시</button>
           <button class="header-btn" onclick="openVideoViewsModal()" style="background: linear-gradient(135deg, #8b5cf6, #7c3aed);">👁️ 시청현황</button>
           <button class="header-btn" onclick="openAttendanceModal()">📋 출석부</button>
           <button class="header-btn" onclick="openProfCourseModal()">📚 강의관리</button>
@@ -2071,7 +2094,7 @@
       </div>
         <!-- 학생 전용 버튼 (배지 왼쪽) -->
         <div class="student-header-btns" id="studentHeaderBtns">
-          <button class="header-btn" onclick="openLectureVideosModal()" style="background: linear-gradient(135deg, #ef4444, #dc2626);">🎬 강의게시</button>
+          <button class="header-btn" onclick="openLectureVideosModal()" style="background: linear-gradient(135deg, #10b981, #059669);">📺 강의시청</button>
           <button class="header-btn" onclick="openMyAttendanceModal()">📋 내 출석현황</button>
           <button class="header-btn success" id="btnCheckIn" onclick="studentCheckIn()">✋ 출석하기</button>
         </div>
@@ -2379,11 +2402,57 @@
     </div>
   </div>
 
-  <!-- ========== 강의게시 모달 (교수/학생 공용) ========== -->
-  <div class="modal-overlay" id="lectureVideosModal">
+  <!-- ========== 강의 게시 모달 (교수용) ========== -->
+  <div class="modal-overlay" id="publishModal">
     <div class="modal" style="max-width: 900px; max-height: 90vh;">
       <div class="modal-header">
         <h2>🎬 강의 게시</h2>
+        <button class="modal-close" onclick="closePublishModal()">&times;</button>
+      </div>
+      <div class="modal-body" style="padding: 0;">
+        <!-- 안내 메시지 -->
+        <div style="padding: 16px; background: #1e293b; border-bottom: 1px solid #334155;">
+          <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 12px;">
+            <span style="font-size: 24px;">📁</span>
+            <div>
+              <div style="font-weight: 600; color: #e5e7eb;">게시 폴더 선택</div>
+              <div style="font-size: 12px; color: #9ca3af;">C:\gcu-online\교수이름\강의명\게시 폴더를 선택하세요</div>
+            </div>
+          </div>
+          <button onclick="selectPublishFolder()" style="width: 100%; padding: 12px; background: linear-gradient(135deg, #3b82f6, #2563eb); border: none; border-radius: 8px; color: white; font-size: 14px; cursor: pointer; font-weight: 600;">
+            📂 게시 폴더 선택
+          </button>
+          <div id="publishFolderPath" style="margin-top: 8px; font-size: 12px; color: #6b7280; text-align: center;"></div>
+        </div>
+        
+        <!-- 파일 목록 -->
+        <div id="publishFilesList" style="padding: 16px; max-height: 50vh; overflow-y: auto;">
+          <div style="text-align: center; color: #9ca3af; padding: 40px;">
+            <div style="font-size: 48px; margin-bottom: 16px;">📂</div>
+            <div>게시 폴더를 선택하면 파일 목록이 표시됩니다.</div>
+            <div style="margin-top: 8px; font-size: 12px; color: #6b7280;">
+              폴더에 영상 파일을 넣으면 자동으로 유튜브에 업로드됩니다.
+            </div>
+          </div>
+        </div>
+        
+        <!-- 상태 표시 -->
+        <div style="padding: 12px 16px; background: #0f172a; border-top: 1px solid #334155; font-size: 12px; color: #9ca3af;">
+          <div style="display: flex; align-items: center; gap: 16px;">
+            <span>🟢 업로드 완료</span>
+            <span>🟡 업로드 대기중</span>
+            <span>⚪ 미업로드</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========== 강의 시청 모달 (학생용) ========== -->
+  <div class="modal-overlay" id="lectureVideosModal">
+    <div class="modal" style="max-width: 900px; max-height: 90vh;">
+      <div class="modal-header">
+        <h2>📺 강의 시청</h2>
         <button class="modal-close" onclick="closeLectureVideosModal()">&times;</button>
       </div>
       <div class="modal-body" style="padding: 0;">
@@ -3379,8 +3448,181 @@
       loadAttendanceDataLocal();
     }
 
-    // ========== 강의 게시 모달 ==========
-    let lectureVideosData = {};  // Firebase에서 가져온 강의 게시 데이터
+    // ========== 강의 게시 모달 (교수용) ==========
+    let publishFolderHandle = null;
+    let uploadedVideos = {};  // Firebase에서 가져온 이미 업로드된 영상 목록
+    
+    function openPublishModal() {
+      document.getElementById('publishModal').classList.add('show');
+      loadUploadedVideos();
+    }
+    
+    function closePublishModal() {
+      document.getElementById('publishModal').classList.remove('show');
+    }
+    
+    async function selectPublishFolder() {
+      try {
+        // 폴더 선택 다이얼로그
+        publishFolderHandle = await window.showDirectoryPicker({
+          mode: 'readwrite'
+        });
+        
+        document.getElementById('publishFolderPath').textContent = `📁 ${publishFolderHandle.name}`;
+        
+        // 파일 목록 로드
+        await loadPublishFiles();
+        
+      } catch (err) {
+        if (err.name !== 'AbortError') {
+          console.error('폴더 선택 오류:', err);
+          alert('폴더를 선택할 수 없습니다.');
+        }
+      }
+    }
+    
+    async function loadUploadedVideos() {
+      // Firebase에서 현재 교수의 업로드된 영상 목록 가져오기
+      if (!firebaseEnabled || !db) return;
+      
+      try {
+        const professor = currentUser.name;
+        const course = currentUser.course;
+        
+        const snapshot = await db.ref(`lectures/${professor}/${course}`).once('value');
+        const data = snapshot.val();
+        
+        uploadedVideos = {};
+        if (data) {
+          Object.values(data).forEach(video => {
+            // 파일명으로 키 생성
+            const fileName = video.fileName || video.title;
+            if (fileName) {
+              uploadedVideos[fileName.toLowerCase()] = video;
+            }
+          });
+        }
+        
+        console.log('📋 업로드된 영상:', Object.keys(uploadedVideos).length, '개');
+        
+      } catch (err) {
+        console.error('업로드된 영상 목록 로드 오류:', err);
+      }
+    }
+    
+    async function loadPublishFiles() {
+      const listContainer = document.getElementById('publishFilesList');
+      
+      if (!publishFolderHandle) {
+        listContainer.innerHTML = `
+          <div style="text-align: center; color: #9ca3af; padding: 40px;">
+            <div style="font-size: 48px; margin-bottom: 16px;">📂</div>
+            <div>게시 폴더를 선택하면 파일 목록이 표시됩니다.</div>
+          </div>
+        `;
+        return;
+      }
+      
+      listContainer.innerHTML = '<div style="text-align: center; padding: 20px; color: #9ca3af;">⏳ 파일 목록 로딩 중...</div>';
+      
+      try {
+        const files = [];
+        const videoExtensions = ['.mp4', '.webm', '.avi', '.mov', '.mkv'];
+        
+        // 폴더 내 파일 목록 가져오기
+        for await (const entry of publishFolderHandle.values()) {
+          if (entry.kind === 'file') {
+            const ext = entry.name.substring(entry.name.lastIndexOf('.')).toLowerCase();
+            if (videoExtensions.includes(ext)) {
+              const file = await entry.getFile();
+              files.push({
+                name: entry.name,
+                size: file.size,
+                lastModified: file.lastModified,
+                handle: entry
+              });
+            }
+          }
+        }
+        
+        if (files.length === 0) {
+          listContainer.innerHTML = `
+            <div style="text-align: center; color: #9ca3af; padding: 40px;">
+              <div style="font-size: 48px; margin-bottom: 16px;">📭</div>
+              <div>폴더에 영상 파일이 없습니다.</div>
+              <div style="margin-top: 8px; font-size: 12px; color: #6b7280;">
+                .mp4, .webm, .avi, .mov, .mkv 파일을 넣어주세요.
+              </div>
+            </div>
+          `;
+          return;
+        }
+        
+        // 파일 정렬 (최신순)
+        files.sort((a, b) => b.lastModified - a.lastModified);
+        
+        // 파일 목록 HTML 생성
+        let html = '';
+        
+        for (const file of files) {
+          const isUploaded = uploadedVideos[file.name.toLowerCase()];
+          const uploadInfo = isUploaded ? uploadedVideos[file.name.toLowerCase()] : null;
+          const fileSize = formatFileSize(file.size);
+          const fileDate = new Date(file.lastModified).toLocaleDateString('ko-KR');
+          
+          let statusIcon, statusText, statusColor;
+          if (isUploaded) {
+            statusIcon = '🟢';
+            statusText = '업로드 완료';
+            statusColor = '#10b981';
+          } else {
+            statusIcon = '⚪';
+            statusText = '미업로드';
+            statusColor = '#9ca3af';
+          }
+          
+          html += `
+            <div style="display: flex; align-items: center; gap: 12px; padding: 12px; background: #1e293b; border-radius: 8px; margin-bottom: 8px;">
+              <span style="font-size: 24px;">🎬</span>
+              <div style="flex: 1; min-width: 0;">
+                <div style="font-weight: 500; color: #e5e7eb; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+                  ${file.name}
+                </div>
+                <div style="font-size: 12px; color: #9ca3af;">
+                  ${fileSize} • ${fileDate}
+                  ${uploadInfo ? ` • <a href="${uploadInfo.url}" target="_blank" style="color: #60a5fa;">YouTube에서 보기</a>` : ''}
+                </div>
+              </div>
+              <div style="display: flex; align-items: center; gap: 8px;">
+                <span style="color: ${statusColor}; font-size: 12px;">${statusIcon} ${statusText}</span>
+              </div>
+            </div>
+          `;
+        }
+        
+        listContainer.innerHTML = html;
+        
+      } catch (err) {
+        console.error('파일 목록 로드 오류:', err);
+        listContainer.innerHTML = `
+          <div style="text-align: center; color: #ef4444; padding: 40px;">
+            <div style="font-size: 48px; margin-bottom: 16px;">⚠️</div>
+            <div>파일 목록을 불러오는 중 오류가 발생했습니다.</div>
+          </div>
+        `;
+      }
+    }
+    
+    function formatFileSize(bytes) {
+      if (bytes === 0) return '0 Bytes';
+      const k = 1024;
+      const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+      const i = Math.floor(Math.log(bytes) / Math.log(k));
+      return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+    }
+
+    // ========== 강의 시청 모달 (학생용) ==========
+    let lectureVideosData = {};  // Firebase에서 가져온 강의 시청 데이터
     
     function openLectureVideosModal() {
       const modal = document.getElementById('lectureVideosModal');
@@ -4760,8 +5002,7 @@
         
         // UI 업데이트
         document.getElementById('recordingIndicator').style.display = 'inline-flex';
-        document.getElementById('btnStopRecording').disabled = false;
-        document.getElementById('chkRecordClass').disabled = true;
+        updateRecordToggleButton();
         
         console.log('🎥 수업 녹화 시작');
         return true;
@@ -4800,9 +5041,8 @@
       
       // UI 업데이트
       document.getElementById('recordingIndicator').style.display = 'none';
-      document.getElementById('btnStopRecording').disabled = true;
       document.getElementById('audioMeterContainer').style.display = 'none';
-      document.getElementById('chkRecordClass').disabled = false;
+      updateRecordToggleButton();
     }
     
     // 오디오 레벨 미터 시작
@@ -4876,6 +5116,34 @@
     function stopRecordingManual() {
       if (!confirm('녹화를 종료하시겠습니까?\n(녹화 파일이 저장됩니다)')) return;
       stopRecording();
+    }
+
+    // 녹화 토글 (시작/종료)
+    async function toggleRecording() {
+      if (isRecording) {
+        // 녹화 중이면 종료
+        if (!confirm('녹화를 종료하시겠습니까?\n(녹화 파일이 저장됩니다)')) return;
+        stopRecording();
+      } else {
+        // 녹화 중이 아니면 시작
+        await startRecording();
+      }
+    }
+
+    // 녹화 버튼 상태 업데이트
+    function updateRecordToggleButton() {
+      const btn = document.getElementById('btnRecordToggle');
+      if (!btn) return;
+      
+      if (isRecording) {
+        btn.innerHTML = '⏹️ 녹화종료';
+        btn.style.background = 'linear-gradient(135deg, #ef4444, #dc2626)';
+        btn.classList.add('recording-active');
+      } else {
+        btn.innerHTML = '🎥 녹화시작';
+        btn.style.background = 'linear-gradient(135deg, #10b981, #059669)';
+        btn.classList.remove('recording-active');
+      }
     }
 
     // 저장 폴더 선택 함수
@@ -5063,17 +5331,8 @@
       // 차시 카운트 저장
       saveSessionCount();
       
-      // 녹화 체크박스가 체크되어 있으면 녹화 시작
-      const shouldRecord = document.getElementById('chkRecordClass')?.checked;
-      if (shouldRecord) {
-        const recordingStarted = await startRecording();
-        if (!recordingStarted) {
-          // 녹화 시작 실패 시 수업 시작 여부 확인
-          if (!confirm('화면 녹화를 시작하지 못했습니다.\n녹화 없이 수업을 시작하시겠습니까?')) {
-            return;
-          }
-        }
-      }
+      // 녹화는 별도 "녹화시작" 버튼으로 시작
+      // (수업 시작과 녹화를 분리)
       
       attendanceData.currentWeek = weekNum;
       attendanceData.classStartTime = new Date();
@@ -5186,21 +5445,37 @@
     }
 
     function updateClassUI() {
-      const btnStart = document.getElementById('btnStartClass');
-      const btnEnd = document.getElementById('btnEndClass');
+      const btnClassToggle = document.getElementById('btnClassToggle');
       const statusDot = document.getElementById('statusDot');
       const statusText = document.getElementById('classStatusText');
       
       if (attendanceData.isClassActive) {
-        btnStart.disabled = true;
-        btnEnd.disabled = false;
+        // 수업 진행 중 → 종료 버튼 표시
+        if (btnClassToggle) {
+          btnClassToggle.innerHTML = '⏹️ 수업종료';
+          btnClassToggle.style.background = 'linear-gradient(135deg, #ef4444, #dc2626)';
+          btnClassToggle.classList.add('class-active');
+        }
         statusDot.classList.add('live');
         statusText.textContent = `${attendanceData.currentWeek}주차 수업 진행중`;
       } else {
-        btnStart.disabled = false;
-        btnEnd.disabled = true;
+        // 수업 대기 중 → 시작 버튼 표시
+        if (btnClassToggle) {
+          btnClassToggle.innerHTML = '▶️ 수업시작';
+          btnClassToggle.style.background = 'linear-gradient(135deg, #3b82f6, #2563eb)';
+          btnClassToggle.classList.remove('class-active');
+        }
         statusDot.classList.remove('live');
         statusText.textContent = '수업 대기중';
+      }
+    }
+
+    // 수업 토글 (시작/종료)
+    function toggleClass() {
+      if (attendanceData.isClassActive) {
+        endClass();
+      } else {
+        startClass();
       }
     }
 
