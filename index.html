@@ -18,8 +18,6 @@
   <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
   
-  <!-- MP4Box.js for fast video merging -->
-  <script src="https://cdn.jsdelivr.net/npm/mp4box@0.5.2/dist/mp4box.all.min.js"></script>
 
   <style>
     * { box-sizing: border-box; }
@@ -2410,8 +2408,24 @@
           <div class="video-editor-info">
             <span class="video-editor-info-icon">💡</span>
             여러 영상을 하나로 합칩니다. 순서를 변경하려면 ⬆️⬇️ 버튼을 사용하세요.<br>
-            <span style="color:#4ade80;">⚡ 같은 형식(MP4, 동일 코덱/해상도)이면 초고속 결합!</span>
-            <span style="color:#fbbf24;">| 🐢 다른 형식은 영상 길이만큼 소요</span>
+            <span style="color:#4ade80;">🚀 고속 모드: 2~4배 빠르게 결합!</span>
+            <span style="color:#fbbf24;">| 일반 모드: 원본 품질 유지</span>
+          </div>
+          
+          <!-- 결합 속도 옵션 -->
+          <div style="display: flex; gap: 8px; margin-bottom: 12px; flex-wrap: wrap;">
+            <label style="display: flex; align-items: center; gap: 6px; cursor: pointer; padding: 8px 12px; background: #1e293b; border-radius: 8px; border: 2px solid #3b82f6;">
+              <input type="radio" name="mergeSpeed" value="1" style="accent-color: #3b82f6;">
+              <span>🐢 일반 (원본품질)</span>
+            </label>
+            <label style="display: flex; align-items: center; gap: 6px; cursor: pointer; padding: 8px 12px; background: #1e293b; border-radius: 8px; border: 2px solid #22c55e;">
+              <input type="radio" name="mergeSpeed" value="2" checked style="accent-color: #22c55e;">
+              <span>🚀 고속 2배 (권장)</span>
+            </label>
+            <label style="display: flex; align-items: center; gap: 6px; cursor: pointer; padding: 8px 12px; background: #1e293b; border-radius: 8px; border: 2px solid #f59e0b;">
+              <input type="radio" name="mergeSpeed" value="4" style="accent-color: #f59e0b;">
+              <span>⚡ 초고속 4배</span>
+            </label>
           </div>
           
           <div class="video-drop-zone" id="mergeDropZone" onclick="document.getElementById('mergeFileInput').click()">
@@ -5736,394 +5750,16 @@
       return result;
     }
 
-    // MP4 파일 정보 분석 (MP4Box.js 사용)
-    async function analyzeMP4File(file) {
-      return new Promise((resolve, reject) => {
-        const mp4box = MP4Box.createFile();
-        const reader = new FileReader();
-        
-        mp4box.onReady = (info) => {
-          resolve({
-            info,
-            mp4box,
-            isMP4: true,
-            videoCodec: info.videoTracks?.[0]?.codec || null,
-            audioCodec: info.audioTracks?.[0]?.codec || null,
-            width: info.videoTracks?.[0]?.video?.width || 0,
-            height: info.videoTracks?.[0]?.video?.height || 0,
-            duration: info.duration / info.timescale
-          });
-        };
-        
-        mp4box.onError = (e) => {
-          resolve({ isMP4: false, error: e });
-        };
-        
-        reader.onload = (e) => {
-          const buffer = e.target.result;
-          buffer.fileStart = 0;
-          mp4box.appendBuffer(buffer);
-          mp4box.flush();
-        };
-        
-        reader.onerror = () => resolve({ isMP4: false });
-        reader.readAsArrayBuffer(file);
-      });
-    }
-
-    // 빠른 MP4 결합 (재인코딩 없이 demux/remux)
-    async function fastMergeMP4(files, progressCallback) {
-      console.log('⚡ 빠른 결합 모드 시작 (재인코딩 없음)');
-      
-      // 모든 파일의 샘플을 먼저 추출
-      const allVideoSamples = [];
-      const allAudioSamples = [];
-      let videoTimescale = null;
-      let audioTimescale = null;
-      let videoDescription = null;
-      let audioDescription = null;
-      let videoWidth = 0, videoHeight = 0;
-      let videoCodec = null, audioCodec = null;
-      let audioChannelCount = 2, audioSampleRate = 48000;
-      let accumulatedVideoTime = 0; // timescale 단위
-      let accumulatedAudioTime = 0; // timescale 단위
-      
-      for (let i = 0; i < files.length; i++) {
-        progressCallback(5 + (i / files.length) * 70, `파일 ${i + 1}/${files.length} 분석 중...`);
-        
-        const file = files[i];
-        const arrayBuffer = await file.arrayBuffer();
-        
-        const fileData = await new Promise((resolve, reject) => {
-          const mp4box = MP4Box.createFile();
-          const result = {
-            videoSamples: [],
-            audioSamples: [],
-            videoDuration: 0,
-            audioDuration: 0,
-            info: null
-          };
-          
-          let videoExtracted = false;
-          let audioExtracted = false;
-          let hasVideo = false;
-          let hasAudio = false;
-          
-          const checkComplete = () => {
-            if ((!hasVideo || videoExtracted) && (!hasAudio || audioExtracted)) {
-              resolve(result);
-            }
-          };
-          
-          mp4box.onReady = (info) => {
-            result.info = info;
-            hasVideo = info.videoTracks && info.videoTracks.length > 0;
-            hasAudio = info.audioTracks && info.audioTracks.length > 0;
-            
-            // 첫 번째 파일에서 트랙 정보 저장
-            if (i === 0) {
-              if (hasVideo) {
-                const vTrack = info.videoTracks[0];
-                videoTimescale = vTrack.timescale;
-                videoWidth = vTrack.video.width;
-                videoHeight = vTrack.video.height;
-                videoCodec = vTrack.codec;
-                try {
-                  const trak = mp4box.getTrackById(vTrack.id);
-                  videoDescription = trak.mdia.minf.stbl.stsd.entries[0];
-                } catch(e) { console.warn('비디오 description 추출 실패:', e); }
-              }
-              
-              if (hasAudio) {
-                const aTrack = info.audioTracks[0];
-                audioTimescale = aTrack.timescale;
-                audioCodec = aTrack.codec;
-                audioChannelCount = aTrack.audio?.channel_count || 2;
-                audioSampleRate = aTrack.audio?.sample_rate || 48000;
-                try {
-                  const trak = mp4box.getTrackById(aTrack.id);
-                  audioDescription = trak.mdia.minf.stbl.stsd.entries[0];
-                } catch(e) { console.warn('오디오 description 추출 실패:', e); }
-              }
-            }
-            
-            // 각 파일의 duration 계산
-            if (hasVideo) {
-              result.videoDuration = info.videoTracks[0].samples_duration || 
-                                      info.videoTracks[0].duration ||
-                                      info.duration;
-              mp4box.setExtractionOptions(info.videoTracks[0].id, 'video', { nbSamples: 100000 });
-            } else {
-              videoExtracted = true;
-            }
-            
-            if (hasAudio) {
-              result.audioDuration = info.audioTracks[0].samples_duration || 
-                                      info.audioTracks[0].duration ||
-                                      info.duration;
-              mp4box.setExtractionOptions(info.audioTracks[0].id, 'audio', { nbSamples: 100000 });
-            } else {
-              audioExtracted = true;
-            }
-            
-            if (!hasVideo && !hasAudio) {
-              resolve(result);
-              return;
-            }
-            
-            mp4box.start();
-          };
-          
-          mp4box.onSamples = (trackId, user, samples) => {
-            if (user === 'video') {
-              result.videoSamples.push(...samples);
-              videoExtracted = true;
-            } else if (user === 'audio') {
-              result.audioSamples.push(...samples);
-              audioExtracted = true;
-            }
-            checkComplete();
-          };
-          
-          mp4box.onError = (e) => {
-            console.warn('MP4Box 파일 분석 오류:', e);
-            reject(e);
-          };
-          
-          // 타임아웃
-          setTimeout(() => {
-            if (!videoExtracted) videoExtracted = true;
-            if (!audioExtracted) audioExtracted = true;
-            checkComplete();
-          }, 60000);
-          
-          const buffer = arrayBuffer.slice(0);
-          buffer.fileStart = 0;
-          mp4box.appendBuffer(buffer);
-          mp4box.flush();
-        });
-        
-        // 샘플에 시간 오프셋 적용하여 저장
-        for (const sample of fileData.videoSamples) {
-          allVideoSamples.push({
-            data: sample.data,
-            duration: sample.duration,
-            dts: sample.dts + accumulatedVideoTime,
-            cts: sample.cts + accumulatedVideoTime,
-            is_sync: sample.is_sync
-          });
-        }
-        
-        for (const sample of fileData.audioSamples) {
-          allAudioSamples.push({
-            data: sample.data,
-            duration: sample.duration,
-            dts: sample.dts + accumulatedAudioTime,
-            cts: sample.cts + accumulatedAudioTime,
-            is_sync: sample.is_sync
-          });
-        }
-        
-        // 다음 파일을 위한 시간 오프셋 누적
-        accumulatedVideoTime += fileData.videoDuration;
-        accumulatedAudioTime += fileData.audioDuration;
-        
-        console.log(`📁 파일 ${i + 1}: 비디오 ${fileData.videoSamples.length}샘플, 오디오 ${fileData.audioSamples.length}샘플`);
-      }
-      
-      progressCallback(80, '파일 생성 중...');
-      
-      // 출력 파일 생성
-      const outputFile = MP4Box.createFile();
-      
-      // 비디오 트랙 추가
-      let videoTrackId = null;
-      if (allVideoSamples.length > 0 && videoTimescale) {
-        try {
-          const trackOptions = {
-            timescale: videoTimescale,
-            width: videoWidth,
-            height: videoHeight,
-            codec: videoCodec,
-            language: 'und'
-          };
-          if (videoDescription) {
-            trackOptions.description = videoDescription;
-          }
-          videoTrackId = outputFile.addTrack(trackOptions);
-          console.log('✅ 비디오 트랙 생성:', videoTrackId, `(${allVideoSamples.length} 샘플)`);
-        } catch(e) {
-          console.warn('비디오 트랙 추가 실패:', e);
-        }
-      }
-      
-      // 오디오 트랙 추가
-      let audioTrackId = null;
-      if (allAudioSamples.length > 0 && audioTimescale) {
-        try {
-          const trackOptions = {
-            timescale: audioTimescale,
-            codec: audioCodec,
-            channel_count: audioChannelCount,
-            samplerate: audioSampleRate,
-            language: 'und'
-          };
-          if (audioDescription) {
-            trackOptions.description = audioDescription;
-          }
-          audioTrackId = outputFile.addTrack(trackOptions);
-          console.log('✅ 오디오 트랙 생성:', audioTrackId, `(${allAudioSamples.length} 샘플)`);
-        } catch(e) {
-          console.warn('오디오 트랙 추가 실패:', e);
-        }
-      }
-      
-      if (!videoTrackId && !audioTrackId) {
-        throw new Error('트랙을 생성할 수 없습니다');
-      }
-      
-      progressCallback(85, '샘플 추가 중...');
-      
-      // 비디오 샘플 추가
-      if (videoTrackId) {
-        for (let i = 0; i < allVideoSamples.length; i++) {
-          const sample = allVideoSamples[i];
-          try {
-            outputFile.addSample(videoTrackId, sample.data, {
-              duration: sample.duration,
-              dts: sample.dts,
-              cts: sample.cts,
-              is_sync: sample.is_sync
-            });
-          } catch(e) { /* 무시 */ }
-          
-          if (i % 1000 === 0) {
-            progressCallback(85 + (i / allVideoSamples.length) * 5, `비디오 샘플 ${i}/${allVideoSamples.length}...`);
-          }
-        }
-      }
-      
-      // 오디오 샘플 추가
-      if (audioTrackId) {
-        for (let i = 0; i < allAudioSamples.length; i++) {
-          const sample = allAudioSamples[i];
-          try {
-            outputFile.addSample(audioTrackId, sample.data, {
-              duration: sample.duration,
-              dts: sample.dts,
-              cts: sample.cts,
-              is_sync: sample.is_sync
-            });
-          } catch(e) { /* 무시 */ }
-        }
-      }
-      
-      progressCallback(92, '최종 파일 생성 중...');
-      
-      // 출력 파일 생성 - save() 메서드 사용
-      let outputBlob;
-      try {
-        // MP4Box.js의 save 메서드는 ArrayBuffer 배열을 반환
-        const outputBuffers = outputFile.getBuffer ? outputFile.getBuffer() : null;
-        
-        if (outputBuffers) {
-          outputBlob = new Blob([outputBuffers], { type: 'video/mp4' });
-        } else {
-          // getBuffer가 없으면 stream 방식 시도
-          const stream = outputFile.stream ? outputFile.stream() : null;
-          if (stream) {
-            const chunks = [];
-            const reader = stream.getReader();
-            while (true) {
-              const { done, value } = await reader.read();
-              if (done) break;
-              chunks.push(value);
-            }
-            outputBlob = new Blob(chunks, { type: 'video/mp4' });
-          } else {
-            throw new Error('MP4Box 출력 메서드를 찾을 수 없습니다');
-          }
-        }
-      } catch(e) {
-        console.error('MP4 파일 생성 실패:', e);
-        throw new Error('MP4 파일 생성 실패: ' + e.message);
-      }
-      
-      if (!outputBlob || outputBlob.size < 1000) {
-        throw new Error('출력 파일이 너무 작습니다 (' + (outputBlob?.size || 0) + ' bytes)');
-      }
-      
-      console.log('⚡ 빠른 결합 완료! 출력 크기:', (outputBlob.size / 1024 / 1024).toFixed(2), 'MB');
-      return outputBlob;
-    }
-
-    // 모든 파일이 같은 MP4 형식인지 확인
-    async function canUseFastMerge(files) {
-      if (files.length < 2) return { canFast: false };
-      
-      // 모든 파일이 MP4인지 확인
-      const allMP4 = files.every(f => 
-        f.type === 'video/mp4' || f.name.toLowerCase().endsWith('.mp4')
-      );
-      
-      if (!allMP4) {
-        console.log('🐢 일반 결합: 모든 파일이 MP4가 아님');
-        return { canFast: false, reason: '모든 파일이 MP4가 아닙니다' };
-      }
-      
-      // MP4Box.js 사용 가능 여부 확인
-      if (typeof MP4Box === 'undefined') {
-        console.log('🐢 일반 결합: MP4Box.js 로드 안됨');
-        return { canFast: false, reason: 'MP4Box.js 미로드' };
-      }
-      
-      // 첫 번째 파일 분석
-      const firstAnalysis = await analyzeMP4File(files[0]);
-      if (!firstAnalysis.isMP4) {
-        return { canFast: false, reason: '첫 번째 파일 분석 실패' };
-      }
-      
-      // 나머지 파일들과 코덱 비교
-      for (let i = 1; i < files.length; i++) {
-        const analysis = await analyzeMP4File(files[i]);
-        if (!analysis.isMP4) {
-          return { canFast: false, reason: `${files[i].name} 분석 실패` };
-        }
-        
-        // 비디오 코덱 비교 (avc1.xxxxx 형태에서 기본 코덱만 비교)
-        const firstVideoBase = firstAnalysis.videoCodec?.split('.')[0];
-        const currentVideoBase = analysis.videoCodec?.split('.')[0];
-        
-        if (firstVideoBase !== currentVideoBase) {
-          return { 
-            canFast: false, 
-            reason: `비디오 코덱 불일치: ${firstVideoBase} vs ${currentVideoBase}` 
-          };
-        }
-        
-        // 해상도 비교
-        if (firstAnalysis.width !== analysis.width || firstAnalysis.height !== analysis.height) {
-          return { 
-            canFast: false, 
-            reason: `해상도 불일치: ${firstAnalysis.width}x${firstAnalysis.height} vs ${analysis.width}x${analysis.height}` 
-          };
-        }
-      }
-      
-      console.log('⚡ 빠른 결합 가능! 코덱:', firstAnalysis.videoCodec);
-      return { 
-        canFast: true, 
-        videoCodec: firstAnalysis.videoCodec,
-        audioCodec: firstAnalysis.audioCodec 
-      };
-    }
-
-    // 느린 결합 (Canvas + MediaRecorder 방식) - 폴백용
-    async function slowMergeVideos(progressCallback) {
+    // 영상 결합 (Canvas + MediaRecorder 방식) - 속도 조절 가능
+    async function slowMergeVideos(progressCallback, playbackSpeed = 1) {
       const videoInfos = [];
       let totalDuration = 0;
       let maxWidth = 0;
       let maxHeight = 0;
+      
+      const speedLabel = playbackSpeed === 1 ? '🐢 일반' : playbackSpeed === 2 ? '🚀 고속' : '⚡ 초고속';
+      console.log(`${speedLabel} 결합 모드 (${playbackSpeed}배속)`);
+      progressCallback(5, `${speedLabel} 결합 준비 중...`);
       
       for (let i = 0; i < mergeFiles.length; i++) {
         const file = mergeFiles[i];
@@ -6202,6 +5838,8 @@
         }
         
         video.currentTime = 0;
+        video.playbackRate = playbackSpeed; // 재생 속도 설정
+        video.muted = true; // 고속 재생 시 오디오 끄기 (오디오는 별도 처리)
         await video.play();
         
         await new Promise((resolve) => {
@@ -6226,9 +5864,14 @@
             
             ctx.drawImage(video, x, y, w, h);
             
+            // 실제 경과 시간 기준으로 진행률 계산 (배속 적용)
             const currentTotal = processedDuration + video.currentTime;
             const percent = Math.min((currentTotal / totalDuration) * 100, 99);
-            progressCallback(10 + percent * 0.85, `영상 ${i + 1}/${videoInfos.length} 처리 중...`);
+            const remainingTime = (totalDuration - currentTotal) / playbackSpeed;
+            const remainingText = remainingTime > 60 ? 
+              `약 ${Math.ceil(remainingTime / 60)}분 남음` : 
+              `약 ${Math.ceil(remainingTime)}초 남음`;
+            progressCallback(10 + percent * 0.85, `영상 ${i + 1}/${videoInfos.length} 처리 중... (${remainingText})`);
             
             requestAnimationFrame(drawFrame);
           }
@@ -6282,65 +5925,25 @@
         document.getElementById('mergeProgressText').textContent = text;
       };
       
-      progressCallback(5, '영상 분석 중...');
+      // 속도 옵션 읽기
+      const speedOption = document.querySelector('input[name="mergeSpeed"]:checked');
+      const playbackSpeed = speedOption ? parseInt(speedOption.value) : 2;
+      const speedLabel = playbackSpeed === 1 ? '🐢 일반' : playbackSpeed === 2 ? '🚀 고속 2배' : '⚡ 초고속 4배';
+      
+      progressCallback(5, `${speedLabel} 모드 준비 중...`);
 
       try {
         if (mergeAudioContext) {
           try { mergeAudioContext.close(); } catch(e) {}
         }
         
-        // 빠른 결합 가능 여부 확인
-        const fastCheck = await canUseFastMerge(mergeFiles);
-        
         let blob, totalDuration, fileExt;
         
-        let usedFastMode = false; // 실제로 빠른 모드가 성공했는지 추적
-        
-        if (fastCheck.canFast) {
-          // ⚡ 빠른 결합 (같은 코덱 MP4)
-          progressCallback(10, '⚡ 빠른 결합 모드 시도...');
-          
-          try {
-            blob = await fastMergeMP4(mergeFiles, progressCallback);
-            
-            // Blob 유효성 검사
-            if (!blob || blob.size < 1000) {
-              throw new Error('출력 파일이 너무 작습니다');
-            }
-            
-            fileExt = 'mp4';
-            usedFastMode = true;
-            
-            // 총 길이 계산
-            totalDuration = 0;
-            for (const file of mergeFiles) {
-              const video = document.createElement('video');
-              video.src = URL.createObjectURL(file);
-              await new Promise(r => { video.onloadedmetadata = r; });
-              totalDuration += video.duration;
-              URL.revokeObjectURL(video.src);
-            }
-            
-            console.log('⚡ 빠른 결합 성공! 크기:', (blob.size / 1024 / 1024).toFixed(2), 'MB');
-          } catch (fastError) {
-            console.warn('⚡ 빠른 결합 실패, 일반 모드로 전환:', fastError);
-            progressCallback(10, '🐢 일반 결합 모드로 전환...');
-            usedFastMode = false;
-            const result = await slowMergeVideos(progressCallback);
-            blob = result.blob;
-            totalDuration = result.totalDuration;
-            fileExt = result.fileExt;
-          }
-        } else {
-          // 🐢 느린 결합 (다른 형식 또는 코덱)
-          console.log('🐢 일반 결합 모드 사용. 이유:', fastCheck.reason);
-          progressCallback(10, `🐢 일반 결합 모드 (${fastCheck.reason || '형식 불일치'})`);
-          
-          const result = await slowMergeVideos(progressCallback);
-          blob = result.blob;
-          totalDuration = result.totalDuration;
-          fileExt = result.fileExt;
-        }
+        // 영상 결합 실행 (속도 옵션 적용)
+        const result = await slowMergeVideos(progressCallback, playbackSpeed);
+        blob = result.blob;
+        totalDuration = result.totalDuration;
+        fileExt = result.fileExt;
         
         // 다운로드 (지능적 파일명 생성)
         const mergedFileName = generateMergedFileName(mergeFiles);
@@ -6355,8 +5958,8 @@
         
         progressCallback(100, '완료!');
         
-        const modeText = usedFastMode ? '⚡ 빠른 결합 (무손실)' : '🐢 일반 결합 (재인코딩)';
-        alert(`✅ 영상 결합 완료!\n\n📁 형식: ${fileExt.toUpperCase()}\n⏱ 총 길이: ${formatTimeShort(totalDuration)}\n🎬 결합된 영상: ${mergeFiles.length}개\n🚀 모드: ${modeText}`);
+        const estimatedTime = Math.ceil(totalDuration / playbackSpeed / 60);
+        alert(`✅ 영상 결합 완료!\n\n📁 형식: ${fileExt.toUpperCase()}\n⏱ 총 길이: ${formatTimeShort(totalDuration)}\n🎬 결합된 영상: ${mergeFiles.length}개\n🚀 모드: ${speedLabel}`);
         
       } catch (error) {
         console.error('영상 결합 오류:', error);
