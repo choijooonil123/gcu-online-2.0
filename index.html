@@ -2055,6 +2055,7 @@
             <div class="audio-meter-bar" id="audioMeterBar"></div>
             <span class="audio-meter-label" id="audioMeterLabel">-∞ dB</span>
           </div>
+          <button class="header-btn" id="btnSystemAudioToggle" onclick="toggleSystemAudio()" style="display:none;" title="시스템 오디오 켜기/끄기">🔊 시스템</button>
           <button class="header-btn danger" id="btnStopRecording" onclick="stopRecordingManual()" disabled>⏹️ 녹화종료</button>
           <button class="header-btn primary" id="btnStartClass" onclick="startClass()">▶️ 수업시작</button>
           <button class="header-btn danger" id="btnEndClass" onclick="endClass()" disabled>⏹️ 수업종료</button>
@@ -2649,6 +2650,8 @@
     let mediaRecorder = null;
     let recordedChunks = [];
     let recordingStream = null;
+    let systemAudioTrack = null;  // 시스템 오디오 트랙 (토글용)
+    let systemAudioEnabled = true;  // 시스템 오디오 활성화 상태
     let currentSession = 1;  // 현재 차시
     let sessionCountByWeek = {};  // 주차별 차시 누적 카운트 { 주차: 차시 }
     let recordingMimeType = 'video/mp4';  // 녹화 형식
@@ -4122,6 +4125,44 @@
 
     // ========== 수업 녹화 기능 ==========
     
+    // 시스템 오디오 토글 함수
+    function toggleSystemAudio() {
+      if (!systemAudioTrack) {
+        alert('시스템 오디오가 없습니다.\n\n💡 화면 공유 시작 시 "시스템 오디오 공유"를 체크해주세요.');
+        return;
+      }
+      
+      systemAudioEnabled = !systemAudioEnabled;
+      systemAudioTrack.enabled = systemAudioEnabled;
+      
+      const btn = document.getElementById('btnSystemAudioToggle');
+      if (systemAudioEnabled) {
+        btn.textContent = '🔊 시스템';
+        btn.style.background = '';
+        btn.title = '시스템 오디오 끄기';
+        console.log('🔊 시스템 오디오 켜짐');
+      } else {
+        btn.textContent = '🔇 시스템';
+        btn.style.background = '#dc2626';
+        btn.title = '시스템 오디오 켜기';
+        console.log('🔇 시스템 오디오 꺼짐');
+      }
+    }
+    
+    // 시스템 오디오 버튼 상태 업데이트
+    function updateSystemAudioButton(hasSystemAudio) {
+      const btn = document.getElementById('btnSystemAudioToggle');
+      if (hasSystemAudio) {
+        btn.style.display = 'inline-flex';
+        btn.textContent = '🔊 시스템';
+        btn.style.background = '';
+        btn.title = '시스템 오디오 끄기';
+        systemAudioEnabled = true;
+      } else {
+        btn.style.display = 'none';
+      }
+    }
+    
     async function startRecording() {
       try {
         // 화면 + 오디오 스트림 요청
@@ -4134,6 +4175,19 @@
           },
           audio: true
         });
+
+        // 시스템 오디오 트랙 저장 (토글용)
+        const displayAudioTracks = displayStream.getAudioTracks();
+        if (displayAudioTracks.length > 0) {
+          systemAudioTrack = displayAudioTracks[0];
+          systemAudioEnabled = true;
+          updateSystemAudioButton(true);
+          console.log('🔊 시스템 오디오 트랙 감지됨:', systemAudioTrack.label);
+        } else {
+          systemAudioTrack = null;
+          updateSystemAudioButton(false);
+          console.log('🔇 시스템 오디오 없음');
+        }
 
         // 마이크 오디오 추가 시도
         let combinedStream = displayStream;
@@ -4345,6 +4399,11 @@
         recordingStream.getTracks().forEach(track => track.stop());
         recordingStream = null;
       }
+      
+      // 시스템 오디오 정리
+      systemAudioTrack = null;
+      systemAudioEnabled = true;
+      updateSystemAudioButton(false);
       
       // 오디오 컨텍스트 정리
       stopAudioMeter();
