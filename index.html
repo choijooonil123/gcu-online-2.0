@@ -5775,158 +5775,286 @@
     async function fastMergeMP4(files, progressCallback) {
       console.log('⚡ 빠른 결합 모드 시작 (재인코딩 없음)');
       
-      const outputFile = MP4Box.createFile();
-      let accumulatedDuration = 0; // timescale 단위로 누적
-      let videoTrackId = null;
-      let audioTrackId = null;
+      // 모든 파일의 샘플을 먼저 추출
+      const allVideoSamples = [];
+      const allAudioSamples = [];
       let videoTimescale = null;
       let audioTimescale = null;
+      let videoDescription = null;
+      let audioDescription = null;
+      let videoWidth = 0, videoHeight = 0;
+      let videoCodec = null, audioCodec = null;
+      let audioChannelCount = 2, audioSampleRate = 48000;
+      let accumulatedVideoTime = 0; // timescale 단위
+      let accumulatedAudioTime = 0; // timescale 단위
       
       for (let i = 0; i < files.length; i++) {
-        progressCallback(5 + (i / files.length) * 85, `파일 ${i + 1}/${files.length} 처리 중...`);
+        progressCallback(5 + (i / files.length) * 70, `파일 ${i + 1}/${files.length} 분석 중...`);
         
         const file = files[i];
         const arrayBuffer = await file.arrayBuffer();
         
-        await new Promise((resolve, reject) => {
+        const fileData = await new Promise((resolve, reject) => {
           const mp4box = MP4Box.createFile();
-          let fileDuration = 0;
-          let samplesProcessed = { video: false, audio: false };
+          const result = {
+            videoSamples: [],
+            audioSamples: [],
+            videoDuration: 0,
+            audioDuration: 0,
+            info: null
+          };
+          
+          let videoExtracted = false;
+          let audioExtracted = false;
           let hasVideo = false;
           let hasAudio = false;
           
+          const checkComplete = () => {
+            if ((!hasVideo || videoExtracted) && (!hasAudio || audioExtracted)) {
+              resolve(result);
+            }
+          };
+          
           mp4box.onReady = (info) => {
-            fileDuration = info.duration; // timescale 단위
+            result.info = info;
             hasVideo = info.videoTracks && info.videoTracks.length > 0;
             hasAudio = info.audioTracks && info.audioTracks.length > 0;
             
-            // 첫 번째 파일에서 출력 트랙 설정
+            // 첫 번째 파일에서 트랙 정보 저장
             if (i === 0) {
               if (hasVideo) {
                 const vTrack = info.videoTracks[0];
                 videoTimescale = vTrack.timescale;
+                videoWidth = vTrack.video.width;
+                videoHeight = vTrack.video.height;
+                videoCodec = vTrack.codec;
                 try {
                   const trak = mp4box.getTrackById(vTrack.id);
-                  videoTrackId = outputFile.addTrack({
-                    type: 'video',
-                    width: vTrack.video.width,
-                    height: vTrack.video.height,
-                    timescale: vTrack.timescale,
-                    codec: vTrack.codec,
-                    language: vTrack.language || 'und',
-                    description: trak.mdia.minf.stbl.stsd.entries[0]
-                  });
-                  console.log('✅ 비디오 트랙 생성:', videoTrackId);
-                } catch(e) { 
-                  console.warn('비디오 트랙 추가 실패:', e);
-                }
+                  videoDescription = trak.mdia.minf.stbl.stsd.entries[0];
+                } catch(e) { console.warn('비디오 description 추출 실패:', e); }
               }
               
               if (hasAudio) {
                 const aTrack = info.audioTracks[0];
                 audioTimescale = aTrack.timescale;
+                audioCodec = aTrack.codec;
+                audioChannelCount = aTrack.audio?.channel_count || 2;
+                audioSampleRate = aTrack.audio?.sample_rate || 48000;
                 try {
                   const trak = mp4box.getTrackById(aTrack.id);
-                  audioTrackId = outputFile.addTrack({
-                    type: 'audio',
-                    timescale: aTrack.timescale,
-                    codec: aTrack.codec,
-                    language: aTrack.language || 'und',
-                    channel_count: aTrack.audio?.channel_count || 2,
-                    samplerate: aTrack.audio?.sample_rate || 48000,
-                    description: trak.mdia.minf.stbl.stsd.entries[0]
-                  });
-                  console.log('✅ 오디오 트랙 생성:', audioTrackId);
-                } catch(e) { 
-                  console.warn('오디오 트랙 추가 실패:', e);
-                }
+                  audioDescription = trak.mdia.minf.stbl.stsd.entries[0];
+                } catch(e) { console.warn('오디오 description 추출 실패:', e); }
               }
             }
             
-            // 샘플 추출 설정
-            if (hasVideo && videoTrackId) {
-              mp4box.setExtractionOptions(info.videoTracks[0].id, 'video', { nbSamples: 10000 });
+            // 각 파일의 duration 계산
+            if (hasVideo) {
+              result.videoDuration = info.videoTracks[0].samples_duration || 
+                                      info.videoTracks[0].duration ||
+                                      info.duration;
+              mp4box.setExtractionOptions(info.videoTracks[0].id, 'video', { nbSamples: 100000 });
             } else {
-              samplesProcessed.video = true;
+              videoExtracted = true;
             }
             
-            if (hasAudio && audioTrackId) {
-              mp4box.setExtractionOptions(info.audioTracks[0].id, 'audio', { nbSamples: 10000 });
+            if (hasAudio) {
+              result.audioDuration = info.audioTracks[0].samples_duration || 
+                                      info.audioTracks[0].duration ||
+                                      info.duration;
+              mp4box.setExtractionOptions(info.audioTracks[0].id, 'audio', { nbSamples: 100000 });
             } else {
-              samplesProcessed.audio = true;
+              audioExtracted = true;
+            }
+            
+            if (!hasVideo && !hasAudio) {
+              resolve(result);
+              return;
             }
             
             mp4box.start();
           };
           
           mp4box.onSamples = (trackId, user, samples) => {
-            const isVideo = user === 'video';
-            const targetTrackId = isVideo ? videoTrackId : audioTrackId;
-            const baseOffset = isVideo ? 
-              Math.floor(accumulatedDuration * videoTimescale / (videoTimescale || 1)) :
-              Math.floor(accumulatedDuration * audioTimescale / (videoTimescale || 1));
-            
-            if (targetTrackId) {
-              for (const sample of samples) {
-                try {
-                  outputFile.addSample(targetTrackId, sample.data, {
-                    duration: sample.duration,
-                    dts: sample.dts + baseOffset,
-                    cts: sample.cts + baseOffset,
-                    is_sync: sample.is_sync
-                  });
-                } catch(e) { /* 무시 */ }
-              }
+            if (user === 'video') {
+              result.videoSamples.push(...samples);
+              videoExtracted = true;
+            } else if (user === 'audio') {
+              result.audioSamples.push(...samples);
+              audioExtracted = true;
             }
-            
-            samplesProcessed[user] = true;
-            
-            // 모든 샘플 처리 완료 확인
-            if (samplesProcessed.video && samplesProcessed.audio) {
-              accumulatedDuration += fileDuration / (videoTimescale || 1000);
-              resolve();
-            }
+            checkComplete();
           };
           
           mp4box.onError = (e) => {
-            console.warn('MP4Box 처리 중 오류:', e);
+            console.warn('MP4Box 파일 분석 오류:', e);
             reject(e);
           };
           
-          // 타임아웃 (안전장치)
-          const timeout = setTimeout(() => {
-            console.warn('MP4Box 타임아웃, 다음 파일로 진행');
-            resolve();
-          }, 30000);
-          
-          // 정상 완료시 타임아웃 취소
-          const originalResolve = resolve;
-          resolve = () => {
-            clearTimeout(timeout);
-            originalResolve();
-          };
+          // 타임아웃
+          setTimeout(() => {
+            if (!videoExtracted) videoExtracted = true;
+            if (!audioExtracted) audioExtracted = true;
+            checkComplete();
+          }, 60000);
           
           const buffer = arrayBuffer.slice(0);
           buffer.fileStart = 0;
           mp4box.appendBuffer(buffer);
           mp4box.flush();
         });
+        
+        // 샘플에 시간 오프셋 적용하여 저장
+        for (const sample of fileData.videoSamples) {
+          allVideoSamples.push({
+            data: sample.data,
+            duration: sample.duration,
+            dts: sample.dts + accumulatedVideoTime,
+            cts: sample.cts + accumulatedVideoTime,
+            is_sync: sample.is_sync
+          });
+        }
+        
+        for (const sample of fileData.audioSamples) {
+          allAudioSamples.push({
+            data: sample.data,
+            duration: sample.duration,
+            dts: sample.dts + accumulatedAudioTime,
+            cts: sample.cts + accumulatedAudioTime,
+            is_sync: sample.is_sync
+          });
+        }
+        
+        // 다음 파일을 위한 시간 오프셋 누적
+        accumulatedVideoTime += fileData.videoDuration;
+        accumulatedAudioTime += fileData.audioDuration;
+        
+        console.log(`📁 파일 ${i + 1}: 비디오 ${fileData.videoSamples.length}샘플, 오디오 ${fileData.audioSamples.length}샘플`);
       }
       
-      progressCallback(92, '파일 생성 중...');
+      progressCallback(80, '파일 생성 중...');
       
       // 출력 파일 생성
+      const outputFile = MP4Box.createFile();
+      
+      // 비디오 트랙 추가
+      let videoTrackId = null;
+      if (allVideoSamples.length > 0 && videoTimescale) {
+        try {
+          const trackOptions = {
+            timescale: videoTimescale,
+            width: videoWidth,
+            height: videoHeight,
+            codec: videoCodec,
+            language: 'und'
+          };
+          if (videoDescription) {
+            trackOptions.description = videoDescription;
+          }
+          videoTrackId = outputFile.addTrack(trackOptions);
+          console.log('✅ 비디오 트랙 생성:', videoTrackId, `(${allVideoSamples.length} 샘플)`);
+        } catch(e) {
+          console.warn('비디오 트랙 추가 실패:', e);
+        }
+      }
+      
+      // 오디오 트랙 추가
+      let audioTrackId = null;
+      if (allAudioSamples.length > 0 && audioTimescale) {
+        try {
+          const trackOptions = {
+            timescale: audioTimescale,
+            codec: audioCodec,
+            channel_count: audioChannelCount,
+            samplerate: audioSampleRate,
+            language: 'und'
+          };
+          if (audioDescription) {
+            trackOptions.description = audioDescription;
+          }
+          audioTrackId = outputFile.addTrack(trackOptions);
+          console.log('✅ 오디오 트랙 생성:', audioTrackId, `(${allAudioSamples.length} 샘플)`);
+        } catch(e) {
+          console.warn('오디오 트랙 추가 실패:', e);
+        }
+      }
+      
       if (!videoTrackId && !audioTrackId) {
         throw new Error('트랙을 생성할 수 없습니다');
       }
       
-      const outputArrayBuffer = outputFile.getBuffer();
-      if (!outputArrayBuffer || outputArrayBuffer.byteLength === 0) {
-        throw new Error('출력 버퍼가 비어있습니다');
+      progressCallback(85, '샘플 추가 중...');
+      
+      // 비디오 샘플 추가
+      if (videoTrackId) {
+        for (let i = 0; i < allVideoSamples.length; i++) {
+          const sample = allVideoSamples[i];
+          try {
+            outputFile.addSample(videoTrackId, sample.data, {
+              duration: sample.duration,
+              dts: sample.dts,
+              cts: sample.cts,
+              is_sync: sample.is_sync
+            });
+          } catch(e) { /* 무시 */ }
+          
+          if (i % 1000 === 0) {
+            progressCallback(85 + (i / allVideoSamples.length) * 5, `비디오 샘플 ${i}/${allVideoSamples.length}...`);
+          }
+        }
       }
       
-      console.log('⚡ 빠른 결합 완료! 출력 크기:', (outputArrayBuffer.byteLength / 1024 / 1024).toFixed(2), 'MB');
-      return new Blob([outputArrayBuffer], { type: 'video/mp4' });
+      // 오디오 샘플 추가
+      if (audioTrackId) {
+        for (let i = 0; i < allAudioSamples.length; i++) {
+          const sample = allAudioSamples[i];
+          try {
+            outputFile.addSample(audioTrackId, sample.data, {
+              duration: sample.duration,
+              dts: sample.dts,
+              cts: sample.cts,
+              is_sync: sample.is_sync
+            });
+          } catch(e) { /* 무시 */ }
+        }
+      }
+      
+      progressCallback(92, '최종 파일 생성 중...');
+      
+      // 출력 파일 생성 - save() 메서드 사용
+      let outputBlob;
+      try {
+        // MP4Box.js의 save 메서드는 ArrayBuffer 배열을 반환
+        const outputBuffers = outputFile.getBuffer ? outputFile.getBuffer() : null;
+        
+        if (outputBuffers) {
+          outputBlob = new Blob([outputBuffers], { type: 'video/mp4' });
+        } else {
+          // getBuffer가 없으면 stream 방식 시도
+          const stream = outputFile.stream ? outputFile.stream() : null;
+          if (stream) {
+            const chunks = [];
+            const reader = stream.getReader();
+            while (true) {
+              const { done, value } = await reader.read();
+              if (done) break;
+              chunks.push(value);
+            }
+            outputBlob = new Blob(chunks, { type: 'video/mp4' });
+          } else {
+            throw new Error('MP4Box 출력 메서드를 찾을 수 없습니다');
+          }
+        }
+      } catch(e) {
+        console.error('MP4 파일 생성 실패:', e);
+        throw new Error('MP4 파일 생성 실패: ' + e.message);
+      }
+      
+      if (!outputBlob || outputBlob.size < 1000) {
+        throw new Error('출력 파일이 너무 작습니다 (' + (outputBlob?.size || 0) + ' bytes)');
+      }
+      
+      console.log('⚡ 빠른 결합 완료! 출력 크기:', (outputBlob.size / 1024 / 1024).toFixed(2), 'MB');
+      return outputBlob;
     }
 
     // 모든 파일이 같은 MP4 형식인지 확인
