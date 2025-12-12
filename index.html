@@ -2058,7 +2058,7 @@
           <button class="header-btn danger" id="btnStopRecording" onclick="stopRecordingManual()" disabled>⏹️ 녹화종료</button>
           <button class="header-btn primary" id="btnStartClass" onclick="startClass()">▶️ 수업시작</button>
           <button class="header-btn danger" id="btnEndClass" onclick="endClass()" disabled>⏹️ 수업종료</button>
-          <button class="header-btn" onclick="openLectureVideosModal()" style="background: linear-gradient(135deg, #ef4444, #dc2626);">🎬 강의영상</button>
+          <button class="header-btn" onclick="openLectureVideosModal()" style="background: linear-gradient(135deg, #ef4444, #dc2626);">🎬 강의게시</button>
           <button class="header-btn" onclick="openVideoViewsModal()" style="background: linear-gradient(135deg, #8b5cf6, #7c3aed);">👁️ 시청현황</button>
           <button class="header-btn" onclick="openAttendanceModal()">📋 출석부</button>
           <button class="header-btn" onclick="openProfCourseModal()">📚 강의관리</button>
@@ -2071,7 +2071,7 @@
       </div>
         <!-- 학생 전용 버튼 (배지 왼쪽) -->
         <div class="student-header-btns" id="studentHeaderBtns">
-          <button class="header-btn" onclick="openLectureVideosModal()" style="background: linear-gradient(135deg, #ef4444, #dc2626);">🎬 강의영상</button>
+          <button class="header-btn" onclick="openLectureVideosModal()" style="background: linear-gradient(135deg, #ef4444, #dc2626);">🎬 강의게시</button>
           <button class="header-btn" onclick="openMyAttendanceModal()">📋 내 출석현황</button>
           <button class="header-btn success" id="btnCheckIn" onclick="studentCheckIn()">✋ 출석하기</button>
         </div>
@@ -2379,11 +2379,11 @@
     </div>
   </div>
 
-  <!-- ========== 강의영상 모달 (교수/학생 공용) ========== -->
+  <!-- ========== 강의게시 모달 (교수/학생 공용) ========== -->
   <div class="modal-overlay" id="lectureVideosModal">
     <div class="modal" style="max-width: 900px; max-height: 90vh;">
       <div class="modal-header">
-        <h2>🎬 강의 영상</h2>
+        <h2>🎬 강의 게시</h2>
         <button class="modal-close" onclick="closeLectureVideosModal()">&times;</button>
       </div>
       <div class="modal-body" style="padding: 0;">
@@ -3379,8 +3379,8 @@
       loadAttendanceDataLocal();
     }
 
-    // ========== 강의 영상 모달 ==========
-    let lectureVideosData = {};  // Firebase에서 가져온 강의 영상 데이터
+    // ========== 강의 게시 모달 ==========
+    let lectureVideosData = {};  // Firebase에서 가져온 강의 게시 데이터
     
     function openLectureVideosModal() {
       const modal = document.getElementById('lectureVideosModal');
@@ -3490,12 +3490,12 @@
           return;
         }
         
-        // 강의 영상 목록 가져오기
+        // 강의 게시 목록 가져오기
         const lecturesSnapshot = await db.ref(`lectures/${currentUser.name}/${currentUser.course}`).once('value');
         const lectures = lecturesSnapshot.val();
         
         if (!lectures || Object.keys(lectures).length === 0) {
-          container.innerHTML = '<div style="text-align: center; padding: 40px; color: #9ca3af;">아직 업로드된 강의 영상이 없습니다.</div>';
+          container.innerHTML = '<div style="text-align: center; padding: 40px; color: #9ca3af;">아직 게시된 강의가 없습니다.</div>';
           return;
         }
         
@@ -3613,7 +3613,7 @@
       const [professor, course] = courseSelect.value.split('/');
       
       try {
-        // Firebase에서 강의 영상 데이터 가져오기
+        // Firebase에서 강의 게시 데이터 가져오기
         const snapshot = await db.ref(`lectures/${professor}/${course}`).once('value');
         const videos = snapshot.val();
         
@@ -3621,7 +3621,7 @@
           listContainer.innerHTML = `
             <div style="text-align: center; color: #9ca3af; padding: 40px;">
               <div style="font-size: 48px; margin-bottom: 16px;">📭</div>
-              <div>아직 업로드된 강의 영상이 없습니다.</div>
+              <div>아직 게시된 강의가 없습니다.</div>
               ${currentUser.role === 'professor' ? '<div style="margin-top: 8px; font-size: 12px; color: #6b7280;">녹화 후 "게시" 폴더에 넣으면 자동 업로드됩니다.</div>' : ''}
             </div>
           `;
@@ -3658,7 +3658,7 @@
           
           weekVideos.forEach(video => {
             const uploadDate = video.uploadedAt ? new Date(video.uploadedAt).toLocaleDateString('ko-KR') : '';
-            const videoTitle = video.title || video.fileName || '강의 영상';
+            const videoTitle = video.title || video.fileName || '게시 영상';
             const videoKey = `${video.week || 1}_${video.session || 1}`;
             
             html += `
@@ -3686,11 +3686,11 @@
         listContainer.innerHTML = html;
         
       } catch (error) {
-        console.error('강의 영상 로드 오류:', error);
+        console.error('강의 게시 로드 오류:', error);
         listContainer.innerHTML = `
           <div style="text-align: center; color: #ef4444; padding: 40px;">
             <div style="font-size: 48px; margin-bottom: 16px;">⚠️</div>
-            <div>강의 영상을 불러오는 중 오류가 발생했습니다.</div>
+            <div>게시된 강의를 불러오는 중 오류가 발생했습니다.</div>
             <div style="margin-top: 8px; font-size: 12px; color: #6b7280;">${error.message}</div>
           </div>
         `;
