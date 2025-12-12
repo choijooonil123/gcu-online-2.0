@@ -2422,12 +2422,22 @@
               🔄 새로고침
             </button>
           </div>
-          <div style="background: rgba(0,0,0,0.2); border-radius: 8px; padding: 10px;">
+          <div style="background: rgba(0,0,0,0.2); border-radius: 8px; padding: 10px; margin-bottom: 12px;">
             <div style="font-size: 12px; color: #93c5fd; margin-bottom: 4px;">📁 게시 폴더 경로</div>
             <div style="font-size: 13px; color: #ffffff; font-family: monospace;" id="publishFolderFullPath">C:\gcu-online\교수이름\강의명\게시</div>
-            <div style="font-size: 11px; color: #93c5fd; margin-top: 8px;">
-              💡 이 폴더에 영상을 넣으면 Python 스크립트가 자동으로 유튜브에 업로드합니다.
-            </div>
+          </div>
+          
+          <!-- 서비스 시작 버튼 -->
+          <div style="display: flex; gap: 8px;">
+            <a href="gcu://start" style="flex: 1; display: flex; align-items: center; justify-content: center; gap: 8px; padding: 12px; background: linear-gradient(135deg, #10b981, #059669); border-radius: 8px; color: white; text-decoration: none; font-weight: 600; font-size: 14px;" onclick="showServiceStartMessage()">
+              🚀 업로드 서비스 시작
+            </a>
+            <button onclick="openPublishFolder()" style="padding: 12px 16px; background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); border-radius: 8px; color: white; cursor: pointer; font-size: 14px;" title="게시 폴더 열기">
+              📂
+            </button>
+          </div>
+          <div style="font-size: 11px; color: #93c5fd; margin-top: 8px; text-align: center;">
+            💡 처음 사용 시 <a href="#" onclick="showProtocolSetup(); return false;" style="color: #fbbf24;">프로토콜 등록</a>이 필요합니다
           </div>
         </div>
         
@@ -3690,6 +3700,43 @@
           <div>${message}</div>
         </div>
       `;
+    }
+    
+    function showServiceStartMessage() {
+      // 서비스 시작 버튼 클릭 시 안내 메시지
+      setTimeout(() => {
+        alert('🚀 업로드 서비스가 시작됩니다.\n\n새 PowerShell 창이 열리면서 서비스가 실행됩니다.\n게시 폴더에 영상을 넣으면 자동으로 업로드됩니다.');
+      }, 100);
+    }
+    
+    function openPublishFolder() {
+      // 게시 폴더 경로를 클립보드에 복사
+      const folderPath = `C:\\gcu-online\\${currentUser.name}\\${currentUser.course}\\게시`;
+      
+      if (navigator.clipboard) {
+        navigator.clipboard.writeText(folderPath).then(() => {
+          alert(`📂 게시 폴더 경로가 클립보드에 복사되었습니다.\n\n${folderPath}\n\n탐색기에서 붙여넣기(Ctrl+V) 하세요.`);
+        });
+      } else {
+        prompt('게시 폴더 경로:', folderPath);
+      }
+    }
+    
+    function showProtocolSetup() {
+      const message = `🔧 프로토콜 등록 방법
+
+1. 탐색기에서 다음 파일을 찾으세요:
+   C:\\python\\gcu-online - 2.0\\register_protocol.reg
+
+2. 파일을 더블클릭하세요.
+
+3. "예"를 클릭하여 레지스트리에 등록하세요.
+
+4. 등록 후 "🚀 업로드 서비스 시작" 버튼이 작동합니다.
+
+※ 이 작업은 처음 한 번만 필요합니다.`;
+      
+      alert(message);
     }
     
     // ========== 강의 시청 모달 (학생용) ==========
