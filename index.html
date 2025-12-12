@@ -17,6 +17,9 @@
   <!-- Firebase SDK -->
   <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
+  
+  <!-- MP4Box.js for fast video merging -->
+  <script src="https://cdn.jsdelivr.net/npm/mp4box@0.5.2/dist/mp4box.all.min.js"></script>
 
   <style>
     * { box-sizing: border-box; }
@@ -2406,8 +2409,8 @@
           <div class="video-editor-info">
             <span class="video-editor-info-icon">💡</span>
             여러 영상을 하나로 합칩니다. 순서를 변경하려면 ⬆️⬇️ 버튼을 사용하세요.<br>
-            <span style="color:#fbbf24;">⚠️ 전체 영상 길이만큼 시간이 소요됩니다.</span>
-            <span style="color:#93c5fd;">| 출력: MP4 (또는 WebM)</span>
+            <span style="color:#4ade80;">⚡ 같은 형식(MP4, 동일 코덱/해상도)이면 초고속 결합!</span>
+            <span style="color:#fbbf24;">| 🐢 다른 형식은 영상 길이만큼 소요</span>
           </div>
           
           <div class="video-drop-zone" id="mergeDropZone" onclick="document.getElementById('mergeFileInput').click()">
@@ -5606,6 +5609,474 @@
     // 영상 결합용 전역 변수
     let mergeAudioContext = null;
 
+    // 파일명 지능적 결합 (다른 숫자 부분을 결합)
+    function generateMergedFileName(files) {
+      if (files.length < 2) {
+        return files[0]?.name?.replace(/\.[^/.]+$/, '') || 'merged';
+      }
+      
+      // 확장자 제거
+      const firstName = files[0].name.replace(/\.[^/.]+$/, '');
+      const lastName = files[files.length - 1].name.replace(/\.[^/.]+$/, '');
+      
+      // 두 파일명이 같으면 첫 번째 파일명 반환
+      if (firstName === lastName) {
+        return firstName + '_결합';
+      }
+      
+      // 숫자 패턴 찾기 (숫자와 위치 정보)
+      const findNumbers = (str) => {
+        const matches = [];
+        const regex = /\d+/g;
+        let match;
+        while ((match = regex.exec(str)) !== null) {
+          matches.push({ value: match[0], index: match.index, length: match[0].length });
+        }
+        return matches;
+      };
+      
+      const firstNumbers = findNumbers(firstName);
+      const lastNumbers = findNumbers(lastName);
+      
+      // 결과 파일명 생성
+      let result = firstName;
+      let offset = 0; // 문자열 길이 변화 추적
+      
+      // 각 숫자 위치에서 비교하여 다른 부분 결합
+      for (let i = 0; i < firstNumbers.length && i < lastNumbers.length; i++) {
+        const first = firstNumbers[i];
+        const last = lastNumbers[i];
+        
+        // 위치가 비슷하고 (±5 이내) 값이 다른 경우
+        if (Math.abs(first.index - last.index) <= 5 && first.value !== last.value) {
+          // 첫 번째 숫자와 마지막 숫자를 결합
+          const newValue = first.value + last.value;
+          const insertPos = first.index + offset;
+          
+          result = result.substring(0, insertPos) + 
+                   newValue + 
+                   result.substring(insertPos + first.length);
+          
+          // 오프셋 업데이트 (새 값 길이 - 원래 길이)
+          offset += newValue.length - first.length;
+        }
+      }
+      
+      // 결과가 원본과 같으면 범위 표시 추가
+      if (result === firstName) {
+        // 첫 번째와 마지막 숫자 찾기
+        const firstMatch = firstName.match(/\d+/);
+        const lastMatch = lastName.match(/\d+/);
+        if (firstMatch && lastMatch && firstMatch[0] !== lastMatch[0]) {
+          result = firstName + '~' + lastMatch[0];
+        } else {
+          result = firstName + '_결합';
+        }
+      }
+      
+      return result;
+    }
+
+    // MP4 파일 정보 분석 (MP4Box.js 사용)
+    async function analyzeMP4File(file) {
+      return new Promise((resolve, reject) => {
+        const mp4box = MP4Box.createFile();
+        const reader = new FileReader();
+        
+        mp4box.onReady = (info) => {
+          resolve({
+            info,
+            mp4box,
+            isMP4: true,
+            videoCodec: info.videoTracks?.[0]?.codec || null,
+            audioCodec: info.audioTracks?.[0]?.codec || null,
+            width: info.videoTracks?.[0]?.video?.width || 0,
+            height: info.videoTracks?.[0]?.video?.height || 0,
+            duration: info.duration / info.timescale
+          });
+        };
+        
+        mp4box.onError = (e) => {
+          resolve({ isMP4: false, error: e });
+        };
+        
+        reader.onload = (e) => {
+          const buffer = e.target.result;
+          buffer.fileStart = 0;
+          mp4box.appendBuffer(buffer);
+          mp4box.flush();
+        };
+        
+        reader.onerror = () => resolve({ isMP4: false });
+        reader.readAsArrayBuffer(file);
+      });
+    }
+
+    // 빠른 MP4 결합 (재인코딩 없이 demux/remux)
+    async function fastMergeMP4(files, progressCallback) {
+      console.log('⚡ 빠른 결합 모드 시작 (재인코딩 없음)');
+      
+      const outputFile = MP4Box.createFile();
+      let accumulatedDuration = 0; // timescale 단위로 누적
+      let videoTrackId = null;
+      let audioTrackId = null;
+      let videoTimescale = null;
+      let audioTimescale = null;
+      
+      for (let i = 0; i < files.length; i++) {
+        progressCallback(5 + (i / files.length) * 85, `파일 ${i + 1}/${files.length} 처리 중...`);
+        
+        const file = files[i];
+        const arrayBuffer = await file.arrayBuffer();
+        
+        await new Promise((resolve, reject) => {
+          const mp4box = MP4Box.createFile();
+          let fileDuration = 0;
+          let samplesProcessed = { video: false, audio: false };
+          let hasVideo = false;
+          let hasAudio = false;
+          
+          mp4box.onReady = (info) => {
+            fileDuration = info.duration; // timescale 단위
+            hasVideo = info.videoTracks && info.videoTracks.length > 0;
+            hasAudio = info.audioTracks && info.audioTracks.length > 0;
+            
+            // 첫 번째 파일에서 출력 트랙 설정
+            if (i === 0) {
+              if (hasVideo) {
+                const vTrack = info.videoTracks[0];
+                videoTimescale = vTrack.timescale;
+                try {
+                  const trak = mp4box.getTrackById(vTrack.id);
+                  videoTrackId = outputFile.addTrack({
+                    type: 'video',
+                    width: vTrack.video.width,
+                    height: vTrack.video.height,
+                    timescale: vTrack.timescale,
+                    codec: vTrack.codec,
+                    language: vTrack.language || 'und',
+                    description: trak.mdia.minf.stbl.stsd.entries[0]
+                  });
+                  console.log('✅ 비디오 트랙 생성:', videoTrackId);
+                } catch(e) { 
+                  console.warn('비디오 트랙 추가 실패:', e);
+                }
+              }
+              
+              if (hasAudio) {
+                const aTrack = info.audioTracks[0];
+                audioTimescale = aTrack.timescale;
+                try {
+                  const trak = mp4box.getTrackById(aTrack.id);
+                  audioTrackId = outputFile.addTrack({
+                    type: 'audio',
+                    timescale: aTrack.timescale,
+                    codec: aTrack.codec,
+                    language: aTrack.language || 'und',
+                    channel_count: aTrack.audio?.channel_count || 2,
+                    samplerate: aTrack.audio?.sample_rate || 48000,
+                    description: trak.mdia.minf.stbl.stsd.entries[0]
+                  });
+                  console.log('✅ 오디오 트랙 생성:', audioTrackId);
+                } catch(e) { 
+                  console.warn('오디오 트랙 추가 실패:', e);
+                }
+              }
+            }
+            
+            // 샘플 추출 설정
+            if (hasVideo && videoTrackId) {
+              mp4box.setExtractionOptions(info.videoTracks[0].id, 'video', { nbSamples: 10000 });
+            } else {
+              samplesProcessed.video = true;
+            }
+            
+            if (hasAudio && audioTrackId) {
+              mp4box.setExtractionOptions(info.audioTracks[0].id, 'audio', { nbSamples: 10000 });
+            } else {
+              samplesProcessed.audio = true;
+            }
+            
+            mp4box.start();
+          };
+          
+          mp4box.onSamples = (trackId, user, samples) => {
+            const isVideo = user === 'video';
+            const targetTrackId = isVideo ? videoTrackId : audioTrackId;
+            const baseOffset = isVideo ? 
+              Math.floor(accumulatedDuration * videoTimescale / (videoTimescale || 1)) :
+              Math.floor(accumulatedDuration * audioTimescale / (videoTimescale || 1));
+            
+            if (targetTrackId) {
+              for (const sample of samples) {
+                try {
+                  outputFile.addSample(targetTrackId, sample.data, {
+                    duration: sample.duration,
+                    dts: sample.dts + baseOffset,
+                    cts: sample.cts + baseOffset,
+                    is_sync: sample.is_sync
+                  });
+                } catch(e) { /* 무시 */ }
+              }
+            }
+            
+            samplesProcessed[user] = true;
+            
+            // 모든 샘플 처리 완료 확인
+            if (samplesProcessed.video && samplesProcessed.audio) {
+              accumulatedDuration += fileDuration / (videoTimescale || 1000);
+              resolve();
+            }
+          };
+          
+          mp4box.onError = (e) => {
+            console.warn('MP4Box 처리 중 오류:', e);
+            reject(e);
+          };
+          
+          // 타임아웃 (안전장치)
+          const timeout = setTimeout(() => {
+            console.warn('MP4Box 타임아웃, 다음 파일로 진행');
+            resolve();
+          }, 30000);
+          
+          // 정상 완료시 타임아웃 취소
+          const originalResolve = resolve;
+          resolve = () => {
+            clearTimeout(timeout);
+            originalResolve();
+          };
+          
+          const buffer = arrayBuffer.slice(0);
+          buffer.fileStart = 0;
+          mp4box.appendBuffer(buffer);
+          mp4box.flush();
+        });
+      }
+      
+      progressCallback(92, '파일 생성 중...');
+      
+      // 출력 파일 생성
+      if (!videoTrackId && !audioTrackId) {
+        throw new Error('트랙을 생성할 수 없습니다');
+      }
+      
+      const outputArrayBuffer = outputFile.getBuffer();
+      if (!outputArrayBuffer || outputArrayBuffer.byteLength === 0) {
+        throw new Error('출력 버퍼가 비어있습니다');
+      }
+      
+      console.log('⚡ 빠른 결합 완료! 출력 크기:', (outputArrayBuffer.byteLength / 1024 / 1024).toFixed(2), 'MB');
+      return new Blob([outputArrayBuffer], { type: 'video/mp4' });
+    }
+
+    // 모든 파일이 같은 MP4 형식인지 확인
+    async function canUseFastMerge(files) {
+      if (files.length < 2) return { canFast: false };
+      
+      // 모든 파일이 MP4인지 확인
+      const allMP4 = files.every(f => 
+        f.type === 'video/mp4' || f.name.toLowerCase().endsWith('.mp4')
+      );
+      
+      if (!allMP4) {
+        console.log('🐢 일반 결합: 모든 파일이 MP4가 아님');
+        return { canFast: false, reason: '모든 파일이 MP4가 아닙니다' };
+      }
+      
+      // MP4Box.js 사용 가능 여부 확인
+      if (typeof MP4Box === 'undefined') {
+        console.log('🐢 일반 결합: MP4Box.js 로드 안됨');
+        return { canFast: false, reason: 'MP4Box.js 미로드' };
+      }
+      
+      // 첫 번째 파일 분석
+      const firstAnalysis = await analyzeMP4File(files[0]);
+      if (!firstAnalysis.isMP4) {
+        return { canFast: false, reason: '첫 번째 파일 분석 실패' };
+      }
+      
+      // 나머지 파일들과 코덱 비교
+      for (let i = 1; i < files.length; i++) {
+        const analysis = await analyzeMP4File(files[i]);
+        if (!analysis.isMP4) {
+          return { canFast: false, reason: `${files[i].name} 분석 실패` };
+        }
+        
+        // 비디오 코덱 비교 (avc1.xxxxx 형태에서 기본 코덱만 비교)
+        const firstVideoBase = firstAnalysis.videoCodec?.split('.')[0];
+        const currentVideoBase = analysis.videoCodec?.split('.')[0];
+        
+        if (firstVideoBase !== currentVideoBase) {
+          return { 
+            canFast: false, 
+            reason: `비디오 코덱 불일치: ${firstVideoBase} vs ${currentVideoBase}` 
+          };
+        }
+        
+        // 해상도 비교
+        if (firstAnalysis.width !== analysis.width || firstAnalysis.height !== analysis.height) {
+          return { 
+            canFast: false, 
+            reason: `해상도 불일치: ${firstAnalysis.width}x${firstAnalysis.height} vs ${analysis.width}x${analysis.height}` 
+          };
+        }
+      }
+      
+      console.log('⚡ 빠른 결합 가능! 코덱:', firstAnalysis.videoCodec);
+      return { 
+        canFast: true, 
+        videoCodec: firstAnalysis.videoCodec,
+        audioCodec: firstAnalysis.audioCodec 
+      };
+    }
+
+    // 느린 결합 (Canvas + MediaRecorder 방식) - 폴백용
+    async function slowMergeVideos(progressCallback) {
+      const videoInfos = [];
+      let totalDuration = 0;
+      let maxWidth = 0;
+      let maxHeight = 0;
+      
+      for (let i = 0; i < mergeFiles.length; i++) {
+        const file = mergeFiles[i];
+        const tempVideo = document.createElement('video');
+        tempVideo.src = URL.createObjectURL(file);
+        
+        await new Promise((resolve, reject) => {
+          tempVideo.onloadedmetadata = resolve;
+          tempVideo.onerror = () => reject(new Error(`${file.name} 로드 실패`));
+        });
+        
+        videoInfos.push({
+          file,
+          video: tempVideo,
+          duration: tempVideo.duration
+        });
+        
+        totalDuration += tempVideo.duration;
+        maxWidth = Math.max(maxWidth, tempVideo.videoWidth || 1280);
+        maxHeight = Math.max(maxHeight, tempVideo.videoHeight || 720);
+      }
+      
+      progressCallback(10, '녹화 준비 중...');
+      
+      const canvas = document.createElement('canvas');
+      canvas.width = maxWidth;
+      canvas.height = maxHeight;
+      const ctx = canvas.getContext('2d');
+      
+      mergeAudioContext = new (window.AudioContext || window.webkitAudioContext)();
+      
+      const canvasStream = canvas.captureStream(30);
+      const recordedChunks = [];
+      let mimeType = 'video/webm';
+      let fileExt = 'webm';
+      
+      if (MediaRecorder.isTypeSupported('video/mp4;codecs=avc1.42E01E,mp4a.40.2')) {
+        mimeType = 'video/mp4;codecs=avc1.42E01E,mp4a.40.2';
+        fileExt = 'mp4';
+      } else if (MediaRecorder.isTypeSupported('video/mp4')) {
+        mimeType = 'video/mp4';
+        fileExt = 'mp4';
+      } else if (MediaRecorder.isTypeSupported('video/webm;codecs=vp9,opus')) {
+        mimeType = 'video/webm;codecs=vp9,opus';
+      }
+      
+      console.log('🐢 느린 결합 모드, 녹화 형식:', mimeType);
+      
+      let processedDuration = 0;
+      let mediaRecorder = null;
+      
+      for (let i = 0; i < videoInfos.length; i++) {
+        const info = videoInfos[i];
+        const video = info.video;
+        
+        progressCallback(10 + (processedDuration / totalDuration) * 85, `영상 ${i + 1}/${videoInfos.length} 처리 중...`);
+        
+        const source = mergeAudioContext.createMediaElementSource(video);
+        const destination = mergeAudioContext.createMediaStreamDestination();
+        source.connect(destination);
+        
+        const combinedStream = new MediaStream([
+          ...canvasStream.getVideoTracks(),
+          ...destination.stream.getAudioTracks()
+        ]);
+        
+        if (i === 0) {
+          mediaRecorder = new MediaRecorder(combinedStream, { 
+            mimeType, 
+            videoBitsPerSecond: 5000000 
+          });
+          mediaRecorder.ondataavailable = (e) => {
+            if (e.data.size > 0) recordedChunks.push(e.data);
+          };
+          mediaRecorder.start(100);
+        }
+        
+        video.currentTime = 0;
+        await video.play();
+        
+        await new Promise((resolve) => {
+          function drawFrame() {
+            if (video.ended || video.paused) {
+              source.disconnect();
+              resolve();
+              return;
+            }
+            
+            ctx.fillStyle = '#000';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
+            const scale = Math.min(
+              canvas.width / video.videoWidth,
+              canvas.height / video.videoHeight
+            );
+            const w = video.videoWidth * scale;
+            const h = video.videoHeight * scale;
+            const x = (canvas.width - w) / 2;
+            const y = (canvas.height - h) / 2;
+            
+            ctx.drawImage(video, x, y, w, h);
+            
+            const currentTotal = processedDuration + video.currentTime;
+            const percent = Math.min((currentTotal / totalDuration) * 100, 99);
+            progressCallback(10 + percent * 0.85, `영상 ${i + 1}/${videoInfos.length} 처리 중...`);
+            
+            requestAnimationFrame(drawFrame);
+          }
+          
+          video.onended = () => {
+            source.disconnect();
+            resolve();
+          };
+          
+          drawFrame();
+        });
+        
+        processedDuration += info.duration;
+      }
+      
+      // MediaRecorder 중지
+      if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+        await new Promise(resolve => {
+          mediaRecorder.onstop = resolve;
+          mediaRecorder.stop();
+        });
+      }
+      
+      await new Promise(r => setTimeout(r, 300));
+      
+      const blob = new Blob(recordedChunks, { type: mimeType });
+      
+      videoInfos.forEach(info => {
+        URL.revokeObjectURL(info.video.src);
+        info.video.remove();
+      });
+      
+      return { blob, totalDuration, fileExt };
+    }
+
     async function mergeVideos() {
       if (mergeFiles.length < 2) {
         alert('최소 2개의 영상을 추가해주세요.');
@@ -5619,183 +6090,76 @@
       btn.innerHTML = '⏳ 준비 중...';
       progress.classList.add('show');
       
-      document.getElementById('mergeProgressFill').style.width = '5%';
-      document.getElementById('mergeProgressText').textContent = '영상 분석 중...';
+      const progressCallback = (percent, text) => {
+        document.getElementById('mergeProgressFill').style.width = `${percent}%`;
+        document.getElementById('mergeProgressText').textContent = text;
+      };
+      
+      progressCallback(5, '영상 분석 중...');
 
       try {
-        // 기존 오디오 컨텍스트 정리
         if (mergeAudioContext) {
           try { mergeAudioContext.close(); } catch(e) {}
         }
         
-        // 각 영상의 정보 수집
-        const videoInfos = [];
-        let totalDuration = 0;
-        let maxWidth = 0;
-        let maxHeight = 0;
+        // 빠른 결합 가능 여부 확인
+        const fastCheck = await canUseFastMerge(mergeFiles);
         
-        for (let i = 0; i < mergeFiles.length; i++) {
-          const file = mergeFiles[i];
-          const tempVideo = document.createElement('video');
-          tempVideo.src = URL.createObjectURL(file);
-          
-          await new Promise((resolve, reject) => {
-            tempVideo.onloadedmetadata = resolve;
-            tempVideo.onerror = () => reject(new Error(`${file.name} 로드 실패`));
-          });
-          
-          videoInfos.push({
-            file,
-            video: tempVideo,
-            duration: tempVideo.duration
-          });
-          
-          totalDuration += tempVideo.duration;
-          maxWidth = Math.max(maxWidth, tempVideo.videoWidth || 1280);
-          maxHeight = Math.max(maxHeight, tempVideo.videoHeight || 720);
-        }
+        let blob, totalDuration, fileExt;
         
-        document.getElementById('mergeProgressFill').style.width = '10%';
-        document.getElementById('mergeProgressText').textContent = '녹화 준비 중...';
-        
-        // Canvas 준비
-        const canvas = document.createElement('canvas');
-        canvas.width = maxWidth;
-        canvas.height = maxHeight;
-        const ctx = canvas.getContext('2d');
-        
-        // 첫 번째 비디오로 오디오 컨텍스트 생성
-        mergeAudioContext = new (window.AudioContext || window.webkitAudioContext)();
-        
-        // MediaRecorder 설정 (MP4 우선)
-        const canvasStream = canvas.captureStream(30);
-        const recordedChunks = [];
-        let mimeType = 'video/webm';
-        let fileExt = 'webm';
-        
-        if (MediaRecorder.isTypeSupported('video/mp4;codecs=avc1.42E01E,mp4a.40.2')) {
-          mimeType = 'video/mp4;codecs=avc1.42E01E,mp4a.40.2';
-          fileExt = 'mp4';
-        } else if (MediaRecorder.isTypeSupported('video/mp4')) {
-          mimeType = 'video/mp4';
-          fileExt = 'mp4';
-        } else if (MediaRecorder.isTypeSupported('video/webm;codecs=vp9,opus')) {
-          mimeType = 'video/webm;codecs=vp9,opus';
-        }
-        
-        console.log('🔗 결합 녹화 형식:', mimeType);
-        
-        // 순차적으로 각 영상 재생 및 녹화
-        let processedDuration = 0;
-        
-        for (let i = 0; i < videoInfos.length; i++) {
-          const info = videoInfos[i];
-          const video = info.video;
+        if (fastCheck.canFast) {
+          // ⚡ 빠른 결합 (같은 코덱 MP4)
+          progressCallback(10, '⚡ 빠른 결합 모드...');
           
-          document.getElementById('mergeProgressText').textContent = 
-            `영상 ${i + 1}/${videoInfos.length} 처리 중...`;
-          
-          // 오디오 설정
-          const source = mergeAudioContext.createMediaElementSource(video);
-          const destination = mergeAudioContext.createMediaStreamDestination();
-          source.connect(destination);
-          
-          // 스트림 생성
-          const combinedStream = new MediaStream([
-            ...canvasStream.getVideoTracks(),
-            ...destination.stream.getAudioTracks()
-          ]);
-          
-          // 첫 영상에서만 MediaRecorder 시작
-          let mediaRecorder;
-          if (i === 0) {
-            mediaRecorder = new MediaRecorder(combinedStream, { 
-              mimeType, 
-              videoBitsPerSecond: 5000000 
-            });
-            mediaRecorder.ondataavailable = (e) => {
-              if (e.data.size > 0) recordedChunks.push(e.data);
-            };
-            mediaRecorder.start(100);
-          }
-          
-          // 비디오 재생 및 캔버스에 그리기
-          video.currentTime = 0;
-          await video.play();
-          
-          await new Promise((resolve) => {
-            function drawFrame() {
-              if (video.ended || video.paused) {
-                source.disconnect();
-                resolve();
-                return;
-              }
-              
-              // 캔버스에 그리기 (중앙 정렬)
-              ctx.fillStyle = '#000';
-              ctx.fillRect(0, 0, canvas.width, canvas.height);
-              
-              const scale = Math.min(
-                canvas.width / video.videoWidth,
-                canvas.height / video.videoHeight
-              );
-              const w = video.videoWidth * scale;
-              const h = video.videoHeight * scale;
-              const x = (canvas.width - w) / 2;
-              const y = (canvas.height - h) / 2;
-              
-              ctx.drawImage(video, x, y, w, h);
-              
-              // 진행률 업데이트
-              const currentTotal = processedDuration + video.currentTime;
-              const percent = Math.min((currentTotal / totalDuration) * 100, 99);
-              document.getElementById('mergeProgressFill').style.width = `${10 + percent * 0.85}%`;
-              
-              requestAnimationFrame(drawFrame);
+          try {
+            blob = await fastMergeMP4(mergeFiles, progressCallback);
+            fileExt = 'mp4';
+            
+            // 총 길이 계산
+            totalDuration = 0;
+            for (const file of mergeFiles) {
+              const video = document.createElement('video');
+              video.src = URL.createObjectURL(file);
+              await new Promise(r => { video.onloadedmetadata = r; });
+              totalDuration += video.duration;
+              URL.revokeObjectURL(video.src);
             }
             
-            video.onended = () => {
-              source.disconnect();
-              resolve();
-            };
-            
-            drawFrame();
-          });
-          
-          processedDuration += info.duration;
-          
-          // 마지막 영상이면 녹화 중지
-          if (i === videoInfos.length - 1) {
-            // mediaRecorder 찾기
-            const recorder = recordedChunks.length > 0 ? 
-              document.querySelector('video')?.srcObject?.getVideoTracks()[0]?.getSettings()?.mediaRecorder : null;
+            console.log('⚡ 빠른 결합 성공!');
+          } catch (fastError) {
+            console.warn('⚡ 빠른 결합 실패, 일반 모드로 전환:', fastError);
+            progressCallback(10, '🐢 일반 결합 모드로 전환...');
+            const result = await slowMergeVideos(progressCallback);
+            blob = result.blob;
+            totalDuration = result.totalDuration;
+            fileExt = result.fileExt;
           }
+        } else {
+          // 🐢 느린 결합 (다른 형식 또는 코덱)
+          console.log('🐢 일반 결합 모드 사용. 이유:', fastCheck.reason);
+          progressCallback(10, `🐢 일반 결합 모드 (${fastCheck.reason || '형식 불일치'})`);
+          
+          const result = await slowMergeVideos(progressCallback);
+          blob = result.blob;
+          totalDuration = result.totalDuration;
+          fileExt = result.fileExt;
         }
         
-        // 녹화 중지를 위해 약간 대기
-        await new Promise(r => setTimeout(r, 500));
-        
-        // Blob 생성 및 다운로드
-        const blob = new Blob(recordedChunks, { type: mimeType });
+        // 다운로드 (지능적 파일명 생성)
+        const mergedFileName = generateMergedFileName(mergeFiles);
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        a.download = `merged_${Date.now()}.${fileExt}`;
+        a.download = `${mergedFileName}.${fileExt}`;
         document.body.appendChild(a);
         a.click();
         document.body.removeChild(a);
         URL.revokeObjectURL(url);
         
-        // 정리
-        videoInfos.forEach(info => {
-          URL.revokeObjectURL(info.video.src);
-          info.video.remove();
-        });
+        progressCallback(100, '완료!');
         
-        document.getElementById('mergeProgressFill').style.width = '100%';
-        document.getElementById('mergeProgressText').textContent = '완료!';
-        
-        alert(`✅ 영상 결합 완료!\n\n📁 형식: ${fileExt.toUpperCase()}\n⏱ 총 길이: ${formatTimeShort(totalDuration)}\n🎬 결합된 영상: ${mergeFiles.length}개`);
+        const modeText = fastCheck.canFast ? '⚡ 빠른 결합' : '🐢 일반 결합';
+        alert(`✅ 영상 결합 완료!\n\n📁 형식: ${fileExt.toUpperCase()}\n⏱ 총 길이: ${formatTimeShort(totalDuration)}\n🎬 결합된 영상: ${mergeFiles.length}개\n🚀 모드: ${modeText}`);
         
       } catch (error) {
         console.error('영상 결합 오류:', error);
