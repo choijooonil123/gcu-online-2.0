@@ -3451,6 +3451,9 @@
       courseData.push(newCourse);
       saveCourseData();
 
+      // 폴더 생성 요청을 Firebase에 저장
+      requestFolderCreation(professor, name);
+
       // 출석 데이터도 초기화
       const attendanceKey = `attendance_${name}`;
       if (!localStorage.getItem(attendanceKey)) {
@@ -3470,7 +3473,7 @@
       document.getElementById('newStudentList').value = '';
 
       renderCourseList();
-      alert(`"${name}" 강의가 등록되었습니다.`);
+      alert(`"${name}" 강의가 등록되었습니다.\n\n📁 폴더 생성 요청이 전송되었습니다.\nC:\\gcu-online\\${professor}\\${name}`);
     }
 
     function renderCourseList() {
@@ -3570,15 +3573,18 @@
       const course = courseData.find(c => c.id === courseId);
       if (!course) return;
 
-      if (!confirm(`"${course.name}" 강의를 삭제하시겠습니까?\n출석 데이터도 함께 삭제됩니다.`)) return;
+      if (!confirm(`"${course.name}" 강의를 삭제하시겠습니까?\n출석 데이터와 폴더도 함께 삭제됩니다.`)) return;
 
       // 출석 데이터 삭제
       localStorage.removeItem(`attendance_${course.name}`);
 
+      // 폴더 삭제 요청 전송
+      requestFolderDeletion(course.professor, course.name);
+
       courseData = courseData.filter(c => c.id !== courseId);
       saveCourseData();
       renderCourseList();
-      alert('강의가 삭제되었습니다.');
+      alert(`강의가 삭제되었습니다.\n\n📁 폴더 삭제 요청이 전송되었습니다.\nC:\\gcu-online\\${course.professor}\\${course.name}`);
     }
 
     // ========== 강의 관리 (교수용) ==========
@@ -5265,6 +5271,55 @@
         });
       } catch (error) {
         console.error('읽음 기록 오류:', error);
+      }
+    }
+    
+    // ========== 폴더 생성 요청 ==========
+    
+    // 폴더 생성 요청을 Firebase에 저장
+    async function requestFolderCreation(professor, courseName) {
+      try {
+        const requestId = Date.now().toString();
+        const request = {
+          professor: professor,
+          course: courseName,
+          requestedAt: new Date().toISOString(),
+          status: 'pending'
+        };
+        
+        await fetch(`${FIREBASE_DATABASE_URL}/folderRequests/${requestId}.json`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(request)
+        });
+        
+        console.log('📁 폴더 생성 요청 전송:', professor, courseName);
+      } catch (error) {
+        console.error('폴더 생성 요청 오류:', error);
+      }
+    }
+    
+    // 폴더 삭제 요청을 Firebase에 저장
+    async function requestFolderDeletion(professor, courseName) {
+      try {
+        const requestId = Date.now().toString();
+        const request = {
+          professor: professor,
+          course: courseName,
+          action: 'delete',
+          requestedAt: new Date().toISOString(),
+          status: 'pending'
+        };
+        
+        await fetch(`${FIREBASE_DATABASE_URL}/folderDeleteRequests/${requestId}.json`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(request)
+        });
+        
+        console.log('🗑️ 폴더 삭제 요청 전송:', professor, courseName);
+      } catch (error) {
+        console.error('폴더 삭제 요청 오류:', error);
       }
     }
     
