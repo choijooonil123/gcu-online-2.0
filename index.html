@@ -2029,7 +2029,7 @@
         </button>
         
         <button type="button" class="submit-btn" id="btnNotice" style="background:#374151;margin-top:8px;" onclick="openNoticeModal()">
-          📢 공지사항[X]
+          📢 공지사항[없음]
         </button>
     </form>
 
@@ -2913,10 +2913,12 @@
     let courseDataLoaded = false;  // 데이터 로드 완료 여부
 
     // ========== Firebase 설정 ==========
+    const FIREBASE_DATABASE_URL = "https://online-fcfe9-default-rtdb.asia-southeast1.firebasedatabase.app";
+    
     const firebaseConfig = {
       apiKey: "AIzaSyBBDEBlBzo2VWDNIJP4-wn5crBkXlum5zM",
       authDomain: "online-fcfe9.firebaseapp.com",
-      databaseURL: "https://online-fcfe9-default-rtdb.asia-southeast1.firebasedatabase.app",
+      databaseURL: FIREBASE_DATABASE_URL,
       projectId: "online-fcfe9",
       storageBucket: "online-fcfe9.firebasestorage.app",
       messagingSenderId: "484288182734",
@@ -4882,19 +4884,19 @@
         
         if (notice && notice.title && notice.body) {
           currentNotice = notice;
-          btn.innerHTML = '📢 공지사항[O]';
+          btn.innerHTML = '📢 공지사항[있음]';
           btn.style.background = 'linear-gradient(135deg, #ef4444, #dc2626)';
           btn.style.color = '#ffffff';
         } else {
           currentNotice = null;
-          btn.innerHTML = '📢 공지사항[X]';
+          btn.innerHTML = '📢 공지사항[없음]';
           btn.style.background = '#374151';
           btn.style.color = '#ffffff';
         }
       } catch (error) {
         console.error('공지사항 로드 오류:', error);
         currentNotice = null;
-        btn.innerHTML = '📢 공지사항[X]';
+        btn.innerHTML = '📢 공지사항[없음]';
         btn.style.background = '#374151';
       }
     }
