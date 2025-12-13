@@ -2028,8 +2028,8 @@
           🚀 강의실 입장
         </button>
         
-        <button type="button" class="submit-btn" style="background:#374151;margin-top:8px;" onclick="testMicrophonePermission()">
-          🎤 마이크 테스트
+        <button type="button" class="submit-btn" id="btnNotice" style="background:#374151;margin-top:8px;" onclick="openNoticeModal()">
+          📢 공지사항[X]
         </button>
     </form>
 
@@ -2104,6 +2104,9 @@
     <div class="admin-controls" id="adminControls">
       <button class="ctrl-btn primary" onclick="openCourseModal()">
         📚 강의 관리
+      </button>
+      <button class="ctrl-btn" onclick="openNoticeWriteModal()" style="background: linear-gradient(135deg, #f59e0b, #d97706);">
+        📢 공지사항 작성
       </button>
       <button class="ctrl-btn" onclick="openAllAttendanceModal()">
         📋 전체 출석부
@@ -2417,7 +2420,7 @@
             </button>
           </div>
           <div style="background: rgba(0,0,0,0.2); border-radius: 8px; padding: 10px; margin-bottom: 12px;">
-            <div style="font-size: 12px; color: #93c5fd; margin-bottom: 4px;">📁 게시 폴더 경로</div>
+            <div style="font-size: 12px; color: #93c5fd; margin-bottom: 4px;">📁 아래 폴더에 강의영상을 복사(이동) 하시면 유튜브에 자동게시 됩니다.</div>
             <div style="font-size: 13px; color: #ffffff; font-family: monospace;" id="publishFolderFullPath">C:\gcu-online\교수이름\강의명\게시</div>
           </div>
           
@@ -2450,6 +2453,62 @@
             <span>🔵 업로드 중</span>
             <span>🔴 오류</span>
           </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========== 공지사항 모달 ========== -->
+  <div class="modal-overlay" id="noticeModal">
+    <div class="modal-container" style="max-width: 600px;">
+      <div class="modal-header">
+        <h3 style="margin: 0; color: white;">📢 공지사항</h3>
+        <button onclick="closeNoticeModal()" style="background: none; border: none; color: white; font-size: 24px; cursor: pointer;">&times;</button>
+      </div>
+      <div class="modal-body" style="max-height: 60vh; overflow-y: auto;">
+        <div id="noticeContent" style="padding: 16px;">
+          <div style="text-align: center; color: #6b7280;">공지사항이 없습니다.</div>
+        </div>
+      </div>
+      <div class="modal-footer" id="noticeFooter" style="display: none;">
+        <button onclick="confirmNoticeRead()" class="modal-action-btn" style="background: linear-gradient(135deg, #10b981, #059669);">
+          ✅ 읽었습니다 (입장하기)
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========== 공지사항 작성 모달 (운영자용) ========== -->
+  <div class="modal-overlay" id="noticeWriteModal">
+    <div class="modal-container" style="max-width: 700px;">
+      <div class="modal-header">
+        <h3 style="margin: 0; color: white;">📝 공지사항 작성</h3>
+        <button onclick="closeNoticeWriteModal()" style="background: none; border: none; color: white; font-size: 24px; cursor: pointer;">&times;</button>
+      </div>
+      <div class="modal-body" style="padding: 20px;">
+        <div style="margin-bottom: 16px;">
+          <label style="display: block; margin-bottom: 8px; color: #e5e7eb; font-weight: 600;">📌 제목</label>
+          <input type="text" id="noticeTitle" placeholder="공지사항 제목을 입력하세요" 
+                 style="width: 100%; padding: 12px; border: 1px solid #374151; border-radius: 8px; background: #1f2937; color: white; font-size: 14px;">
+        </div>
+        <div style="margin-bottom: 16px;">
+          <label style="display: block; margin-bottom: 8px; color: #e5e7eb; font-weight: 600;">📄 내용</label>
+          <textarea id="noticeBody" placeholder="공지사항 내용을 입력하세요" rows="8"
+                    style="width: 100%; padding: 12px; border: 1px solid #374151; border-radius: 8px; background: #1f2937; color: white; font-size: 14px; resize: vertical;"></textarea>
+        </div>
+        <div style="display: flex; gap: 12px;">
+          <button onclick="saveNotice()" class="modal-action-btn" style="flex: 1; background: linear-gradient(135deg, #10b981, #059669);">
+            💾 저장
+          </button>
+          <button onclick="deleteNotice()" class="modal-action-btn" style="flex: 1; background: linear-gradient(135deg, #ef4444, #dc2626);">
+            🗑️ 삭제
+          </button>
+        </div>
+      </div>
+      <div style="padding: 16px; border-top: 1px solid #374151;">
+        <h4 style="margin: 0 0 12px 0; color: #93c5fd;">📊 읽음 현황</h4>
+        <div id="noticeReadStatus" style="max-height: 200px; overflow-y: auto; font-size: 13px; color: #e5e7eb;">
+          로딩 중...
         </div>
       </div>
     </div>
@@ -3147,6 +3206,18 @@
           alert(`"${course}" 강의의 수강생 명단에 "${name}"이(가) 없습니다.\n\n등록된 수강생: ${studentList}\n\n운영자에게 문의해주세요.`);
           return;
         }
+        
+        // 학생: 공지사항 확인 필요
+        if (currentNotice && currentNotice.title && !checkNoticeRead()) {
+          alert('📢 읽지 않은 공지사항이 있습니다.\n공지사항을 읽고 입장해주세요.');
+          openNoticeModal();
+          // 공지사항 확인 후 다시 로그인하도록 임시 저장
+          sessionStorage.setItem('pendingLogin', JSON.stringify({ name, course, role: 'student' }));
+          return;
+        }
+        
+        // 공지사항 읽음 기록
+        recordNoticeRead(name);
       }
 
       console.log('✅ 로그인 성공:', { name, course, role: currentUser.role });
@@ -4788,6 +4859,280 @@
         }
       }
     }
+    
+    // HTML 이스케이프 함수
+    function escapeHtml(text) {
+      const div = document.createElement('div');
+      div.textContent = text;
+      return div.innerHTML;
+    }
+    
+    // ========== 공지사항 기능 ==========
+    let currentNotice = null;
+    let hasReadNotice = false;
+    
+    // 공지사항 버튼 상태 업데이트
+    async function updateNoticeButton() {
+      const btn = document.getElementById('btnNotice');
+      if (!btn) return;
+      
+      try {
+        const response = await fetch(`${FIREBASE_DATABASE_URL}/notices/current.json`);
+        const notice = await response.json();
+        
+        if (notice && notice.title && notice.body) {
+          currentNotice = notice;
+          btn.innerHTML = '📢 공지사항[O]';
+          btn.style.background = 'linear-gradient(135deg, #ef4444, #dc2626)';
+          btn.style.color = '#ffffff';
+        } else {
+          currentNotice = null;
+          btn.innerHTML = '📢 공지사항[X]';
+          btn.style.background = '#374151';
+          btn.style.color = '#ffffff';
+        }
+      } catch (error) {
+        console.error('공지사항 로드 오류:', error);
+        currentNotice = null;
+        btn.innerHTML = '📢 공지사항[X]';
+        btn.style.background = '#374151';
+      }
+    }
+    
+    // 공지사항 모달 열기
+    function openNoticeModal() {
+      const modal = document.getElementById('noticeModal');
+      const content = document.getElementById('noticeContent');
+      const footer = document.getElementById('noticeFooter');
+      
+      if (currentNotice && currentNotice.title) {
+        const date = currentNotice.createdAt ? new Date(currentNotice.createdAt).toLocaleString() : '';
+        content.innerHTML = `
+          <div style="margin-bottom: 16px;">
+            <h3 style="margin: 0 0 8px 0; color: #60a5fa;">${escapeHtml(currentNotice.title)}</h3>
+            <div style="font-size: 12px; color: #9ca3af;">${date}</div>
+          </div>
+          <div style="white-space: pre-wrap; line-height: 1.6; color: #e5e7eb;">${escapeHtml(currentNotice.body)}</div>
+        `;
+        footer.style.display = 'block';
+      } else {
+        content.innerHTML = '<div style="text-align: center; color: #6b7280; padding: 40px;">📭 현재 공지사항이 없습니다.</div>';
+        footer.style.display = 'none';
+      }
+      
+      modal.classList.add('show');
+    }
+    
+    function closeNoticeModal() {
+      document.getElementById('noticeModal').classList.remove('show');
+    }
+    
+    // 공지사항 읽음 확인
+    function confirmNoticeRead() {
+      hasReadNotice = true;
+      localStorage.setItem('lastReadNoticeId', currentNotice?.createdAt || '');
+      closeNoticeModal();
+      
+      // 대기 중인 로그인이 있으면 처리
+      const pendingLogin = sessionStorage.getItem('pendingLogin');
+      if (pendingLogin) {
+        sessionStorage.removeItem('pendingLogin');
+        const data = JSON.parse(pendingLogin);
+        
+        // 읽음 기록
+        recordNoticeRead(data.name);
+        
+        // 자동 로그인 진행
+        currentUser.name = data.name;
+        currentUser.course = data.course;
+        currentUser.role = data.role;
+        
+        loginOverlay.classList.add('hidden');
+        mainApp.classList.add('show');
+        updateMainUI();
+        
+        alert('✅ 공지사항을 확인하셨습니다.\n수업에 입장합니다!');
+      } else {
+        alert('✅ 공지사항을 확인하셨습니다.\n이제 수업에 입장할 수 있습니다.');
+      }
+    }
+    
+    // 공지사항 읽음 여부 확인
+    function checkNoticeRead() {
+      if (!currentNotice) return true;
+      
+      const lastRead = localStorage.getItem('lastReadNoticeId');
+      return lastRead === (currentNotice.createdAt || '');
+    }
+    
+    // 공지사항 작성 모달 열기 (운영자용)
+    async function openNoticeWriteModal() {
+      const modal = document.getElementById('noticeWriteModal');
+      const titleInput = document.getElementById('noticeTitle');
+      const bodyInput = document.getElementById('noticeBody');
+      
+      // 현재 공지사항 로드
+      try {
+        const response = await fetch(`${FIREBASE_DATABASE_URL}/notices/current.json`);
+        const notice = await response.json();
+        
+        if (notice) {
+          titleInput.value = notice.title || '';
+          bodyInput.value = notice.body || '';
+        } else {
+          titleInput.value = '';
+          bodyInput.value = '';
+        }
+      } catch (error) {
+        titleInput.value = '';
+        bodyInput.value = '';
+      }
+      
+      // 읽음 현황 로드
+      loadNoticeReadStatus();
+      
+      modal.classList.add('show');
+    }
+    
+    function closeNoticeWriteModal() {
+      document.getElementById('noticeWriteModal').classList.remove('show');
+    }
+    
+    // 공지사항 저장
+    async function saveNotice() {
+      const title = document.getElementById('noticeTitle').value.trim();
+      const body = document.getElementById('noticeBody').value.trim();
+      
+      if (!title || !body) {
+        alert('제목과 내용을 모두 입력해주세요.');
+        return;
+      }
+      
+      try {
+        const notice = {
+          title: title,
+          body: body,
+          createdAt: new Date().toISOString(),
+          createdBy: currentUser?.name || '운영자'
+        };
+        
+        const response = await fetch(`${FIREBASE_DATABASE_URL}/notices/current.json`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(notice)
+        });
+        
+        if (response.ok) {
+          // 읽음 기록 초기화
+          await fetch(`${FIREBASE_DATABASE_URL}/notices/readBy.json`, {
+            method: 'DELETE'
+          });
+          
+          alert('✅ 공지사항이 저장되었습니다.');
+          updateNoticeButton();
+          closeNoticeWriteModal();
+        }
+      } catch (error) {
+        console.error('공지사항 저장 오류:', error);
+        alert('공지사항 저장에 실패했습니다.');
+      }
+    }
+    
+    // 공지사항 삭제
+    async function deleteNotice() {
+      if (!confirm('공지사항을 삭제하시겠습니까?')) return;
+      
+      try {
+        await fetch(`${FIREBASE_DATABASE_URL}/notices/current.json`, {
+          method: 'DELETE'
+        });
+        
+        await fetch(`${FIREBASE_DATABASE_URL}/notices/readBy.json`, {
+          method: 'DELETE'
+        });
+        
+        alert('🗑️ 공지사항이 삭제되었습니다.');
+        updateNoticeButton();
+        closeNoticeWriteModal();
+      } catch (error) {
+        console.error('공지사항 삭제 오류:', error);
+        alert('공지사항 삭제에 실패했습니다.');
+      }
+    }
+    
+    // 읽음 현황 로드
+    async function loadNoticeReadStatus() {
+      const container = document.getElementById('noticeReadStatus');
+      
+      try {
+        const [studentsRes, readByRes] = await Promise.all([
+          fetch(`${FIREBASE_DATABASE_URL}/students.json`),
+          fetch(`${FIREBASE_DATABASE_URL}/notices/readBy.json`)
+        ]);
+        
+        const students = await studentsRes.json() || {};
+        const readBy = await readByRes.json() || {};
+        
+        // 전체 학생 목록 수집
+        let allStudents = [];
+        Object.values(students).forEach(course => {
+          if (typeof course === 'object') {
+            Object.values(course).forEach(cls => {
+              if (Array.isArray(cls)) {
+                allStudents = allStudents.concat(cls);
+              }
+            });
+          }
+        });
+        
+        if (allStudents.length === 0) {
+          container.innerHTML = '<div style="color: #6b7280;">등록된 학생이 없습니다.</div>';
+          return;
+        }
+        
+        const readStudents = Object.keys(readBy);
+        const unreadStudents = allStudents.filter(s => !readStudents.includes(s));
+        
+        container.innerHTML = `
+          <div style="margin-bottom: 12px;">
+            <span style="color: #10b981;">✅ 읽음: ${readStudents.length}명</span> / 
+            <span style="color: #ef4444;">❌ 안읽음: ${unreadStudents.length}명</span>
+          </div>
+          <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px;">
+            ${allStudents.map(name => {
+              const isRead = readStudents.includes(name);
+              return `<div style="padding: 6px 10px; border-radius: 6px; background: ${isRead ? 'rgba(16, 185, 129, 0.2)' : 'rgba(239, 68, 68, 0.2)'}; color: ${isRead ? '#10b981' : '#ef4444'};">
+                ${isRead ? '✅' : '❌'} ${name}
+              </div>`;
+            }).join('')}
+          </div>
+        `;
+      } catch (error) {
+        container.innerHTML = '<div style="color: #ef4444;">읽음 현황 로드 실패</div>';
+      }
+    }
+    
+    // 학생 공지사항 읽음 기록
+    async function recordNoticeRead(studentName) {
+      if (!currentNotice || !studentName) return;
+      
+      try {
+        await fetch(`${FIREBASE_DATABASE_URL}/notices/readBy/${studentName}.json`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            readAt: new Date().toISOString()
+          })
+        });
+      } catch (error) {
+        console.error('읽음 기록 오류:', error);
+      }
+    }
+    
+    // 페이지 로드 시 공지사항 버튼 업데이트
+    document.addEventListener('DOMContentLoaded', function() {
+      updateNoticeButton();
+    });
     
     async function requestMediaPermissions() {
       const loadingEl = document.getElementById('jitsiLoading');
