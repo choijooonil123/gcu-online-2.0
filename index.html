@@ -2070,7 +2070,7 @@
             <span class="audio-meter-label" id="audioMeterLabel">-∞ dB</span>
           </div>
           <button class="header-btn" id="btnSystemAudioToggle" onclick="toggleSystemAudio()" style="display:none;" title="시스템 오디오 켜기/끄기">🔊 시스템</button>
-          <span class="header-btn" id="saveFolderIndicator" onclick="selectSaveDirectory()" style="cursor:pointer; color:#fbbf24;" title="클릭하여 저장 폴더 선택">📁 폴더 미선택</span>
+          <button class="header-btn" onclick="openMaterialsModal()" style="background: linear-gradient(135deg, #06b6d4, #0891b2);">📖 강의교재</button>
           <button class="header-btn primary" id="btnClassToggle" onclick="toggleClass()" style="background: linear-gradient(135deg, #3b82f6, #2563eb);">▶️ 수업시작</button>
           <button class="header-btn" onclick="openPublishModal()" style="background: linear-gradient(135deg, #ef4444, #dc2626);">🎬 강의게시</button>
           <button class="header-btn" onclick="openVideoViewsModal()" style="background: linear-gradient(135deg, #8b5cf6, #7c3aed);">👁️ 시청현황</button>
@@ -2450,6 +2450,48 @@
             <span>🟢 업로드 완료</span>
             <span>🔵 업로드 중</span>
             <span>🔴 오류</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========== 강의교재 모달 (교수용) ========== -->
+  <div class="modal-overlay" id="materialsModal" style="background: rgba(0, 0, 0, 0.9);">
+    <div class="modal-container" style="max-width: 800px; background: #1e293b; border: 2px solid #06b6d4; border-radius: 16px; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.8);">
+      <div class="modal-header" style="background: linear-gradient(135deg, #0891b2, #06b6d4); padding: 16px 20px; border-radius: 14px 14px 0 0; display: flex; justify-content: space-between; align-items: center;">
+        <div>
+          <h3 style="margin: 0; color: white;">📖 강의교재 관리</h3>
+          <div id="materialsCourseName" style="font-size: 13px; color: rgba(255,255,255,0.8); margin-top: 4px;">📚 강의명</div>
+        </div>
+        <button onclick="closeMaterialsModal()" style="background: none; border: none; color: white; font-size: 28px; cursor: pointer; line-height: 1;">&times;</button>
+      </div>
+      <div class="modal-body" style="padding: 20px; background: #0f172a; max-height: 60vh; overflow-y: auto;">
+        <!-- 새 교재 추가 폼 -->
+        <div style="background: #1e293b; padding: 16px; border-radius: 12px; margin-bottom: 20px; border: 1px solid #374151;">
+          <h4 style="margin: 0 0 16px 0; color: #22d3ee;">➕ 새 교재 추가</h4>
+          <div style="display: grid; gap: 12px;">
+            <div>
+              <label style="display: block; margin-bottom: 6px; color: #94a3b8; font-size: 13px;">주제 (제목)</label>
+              <input type="text" id="materialTitle" placeholder="예: 1주차 - 심리학 개론" 
+                     style="width: 100%; padding: 10px 12px; border: 1px solid #374151; border-radius: 8px; background: #0f172a; color: white; font-size: 14px;">
+            </div>
+            <div>
+              <label style="display: block; margin-bottom: 6px; color: #94a3b8; font-size: 13px;">URL (링크)</label>
+              <input type="url" id="materialUrl" placeholder="https://drive.google.com/..." 
+                     style="width: 100%; padding: 10px 12px; border: 1px solid #374151; border-radius: 8px; background: #0f172a; color: white; font-size: 14px;">
+            </div>
+            <button onclick="addMaterial()" style="padding: 12px; background: linear-gradient(135deg, #10b981, #059669); border: none; border-radius: 8px; color: white; font-weight: 600; cursor: pointer; font-size: 14px;">
+              ✅ 추가하기
+            </button>
+          </div>
+        </div>
+        
+        <!-- 교재 목록 -->
+        <div>
+          <h4 style="margin: 0 0 16px 0; color: #22d3ee;">📚 등록된 교재 목록</h4>
+          <div id="materialsList" style="display: grid; gap: 12px;">
+            <div style="text-align: center; color: #6b7280; padding: 40px;">등록된 교재가 없습니다.</div>
           </div>
         </div>
       </div>
@@ -5223,6 +5265,144 @@
         });
       } catch (error) {
         console.error('읽음 기록 오류:', error);
+      }
+    }
+    
+    // ========== 강의교재 기능 ==========
+    
+    // 강의교재 모달 열기
+    async function openMaterialsModal() {
+      if (!currentUser.course) {
+        alert('강의를 선택한 후 교재를 관리할 수 있습니다.');
+        return;
+      }
+      
+      const modal = document.getElementById('materialsModal');
+      const courseNameEl = document.getElementById('materialsCourseName');
+      
+      courseNameEl.textContent = `📚 ${currentUser.course}`;
+      
+      // 입력 필드 초기화
+      document.getElementById('materialTitle').value = '';
+      document.getElementById('materialUrl').value = '';
+      
+      // 교재 목록 로드
+      await loadMaterialsList();
+      
+      modal.classList.add('show');
+    }
+    
+    function closeMaterialsModal() {
+      document.getElementById('materialsModal').classList.remove('show');
+    }
+    
+    // 교재 추가
+    async function addMaterial() {
+      const title = document.getElementById('materialTitle').value.trim();
+      const url = document.getElementById('materialUrl').value.trim();
+      
+      if (!title || !url) {
+        alert('주제와 URL을 모두 입력해주세요.');
+        return;
+      }
+      
+      // URL 형식 검증
+      try {
+        new URL(url);
+      } catch (e) {
+        alert('올바른 URL 형식을 입력해주세요.\n예: https://drive.google.com/...');
+        return;
+      }
+      
+      try {
+        const courseKey = currentUser.course.replace(/\./g, '_').replace(/\//g, '_');
+        const materialId = Date.now().toString();
+        
+        const material = {
+          id: materialId,
+          title: title,
+          url: url,
+          professor: currentUser.name,
+          createdAt: new Date().toISOString()
+        };
+        
+        const response = await fetch(`${FIREBASE_DATABASE_URL}/materials/${courseKey}/${materialId}.json`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(material)
+        });
+        
+        if (response.ok) {
+          alert('✅ 교재가 추가되었습니다.');
+          document.getElementById('materialTitle').value = '';
+          document.getElementById('materialUrl').value = '';
+          await loadMaterialsList();
+        }
+      } catch (error) {
+        console.error('교재 추가 오류:', error);
+        alert('교재 추가에 실패했습니다.');
+      }
+    }
+    
+    // 교재 삭제
+    async function deleteMaterial(materialId) {
+      if (!confirm('이 교재를 삭제하시겠습니까?')) return;
+      
+      try {
+        const courseKey = currentUser.course.replace(/\./g, '_').replace(/\//g, '_');
+        
+        await fetch(`${FIREBASE_DATABASE_URL}/materials/${courseKey}/${materialId}.json`, {
+          method: 'DELETE'
+        });
+        
+        alert('🗑️ 교재가 삭제되었습니다.');
+        await loadMaterialsList();
+      } catch (error) {
+        console.error('교재 삭제 오류:', error);
+        alert('교재 삭제에 실패했습니다.');
+      }
+    }
+    
+    // 교재 목록 로드
+    async function loadMaterialsList() {
+      const container = document.getElementById('materialsList');
+      
+      try {
+        const courseKey = currentUser.course.replace(/\./g, '_').replace(/\//g, '_');
+        const response = await fetch(`${FIREBASE_DATABASE_URL}/materials/${courseKey}.json`);
+        const materials = await response.json();
+        
+        if (!materials || Object.keys(materials).length === 0) {
+          container.innerHTML = '<div style="text-align: center; color: #6b7280; padding: 40px;">등록된 교재가 없습니다.</div>';
+          return;
+        }
+        
+        // 날짜순 정렬 (최신순)
+        const sortedMaterials = Object.values(materials).sort((a, b) => 
+          new Date(b.createdAt) - new Date(a.createdAt)
+        );
+        
+        container.innerHTML = sortedMaterials.map(material => {
+          const date = material.createdAt ? new Date(material.createdAt).toLocaleDateString() : '';
+          return `
+            <div style="background: #1e293b; padding: 16px; border-radius: 10px; border: 1px solid #374151; display: flex; justify-content: space-between; align-items: center;">
+              <div style="flex: 1; min-width: 0;">
+                <div style="color: #f1f5f9; font-weight: 600; margin-bottom: 6px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${escapeHtml(material.title)}</div>
+                <a href="${escapeHtml(material.url)}" target="_blank" style="color: #22d3ee; font-size: 13px; text-decoration: none; display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+                  🔗 ${escapeHtml(material.url)}
+                </a>
+                <div style="font-size: 11px; color: #6b7280; margin-top: 6px;">📅 ${date}</div>
+              </div>
+              <button onclick="deleteMaterial('${material.id}')" style="background: #ef4444; border: none; color: white; padding: 8px 12px; border-radius: 6px; cursor: pointer; margin-left: 12px; font-size: 12px;">
+                🗑️ 삭제
+              </button>
+            </div>
+          `;
+        }).join('');
+        
+      } catch (error) {
+        console.error('교재 목록 로드 오류:', error);
+        container.innerHTML = '<div style="text-align: center; color: #ef4444; padding: 40px;">교재 목록을 불러오는데 실패했습니다.</div>';
       }
     }
     
